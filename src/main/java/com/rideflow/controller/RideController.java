@@ -264,6 +264,58 @@ public class RideController {
         ));
     }
 
+    
+    // Cancel a ride request
+    @PutMapping("/{rideId}/cancel/{userId}")
+    public ResponseEntity<?> cancelRide(
+            @PathVariable Long rideId,
+            @PathVariable Long userId) {
+
+        Ride ride = rideRepository.findById(rideId)
+                .orElse(null);
+
+        if (ride == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Ride not found"));
+        }
+
+        User user = userRepository.findById(userId)
+                .orElse(null);
+
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "User not found"));
+        }
+
+        boolean isRider = user.getRole() == User.Role.RIDER
+                && ride.getRider().getId().equals(userId);
+
+        boolean isDriver = user.getRole() == User.Role.DRIVER
+                && ride.getDriver() != null
+                && ride.getDriver().getId().equals(userId);
+
+        if (!isRider && !isDriver) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("message", "Not authorized to cancel this ride"));
+        }
+
+        if (ride.getStatus() != Ride.RideStatus.REQUESTED
+                && ride.getStatus() != Ride.RideStatus.ACCEPTED) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("message", "This ride cannot be cancelled"));
+        }
+
+        ride.setStatus(Ride.RideStatus.CANCELLED);
+        rideRepository.save(ride);
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Ride cancelled successfully",
+                "rideId", ride.getId(),
+                "status", ride.getStatus().toString()
+        ));
+    }
+
+
 
 
   
