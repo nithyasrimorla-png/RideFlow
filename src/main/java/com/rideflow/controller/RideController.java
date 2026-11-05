@@ -10,6 +10,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -90,5 +91,66 @@ public class RideController {
                     .body(Map.of("message",
                             "Please provide valid ride details"));
         }
+    }
+
+    // View rider ride history
+    @GetMapping("/rider/{riderId}")
+    public ResponseEntity<?> getRiderHistory(
+            @PathVariable Long riderId) {
+
+        User rider = userRepository.findById(riderId)
+                .orElse(null);
+
+        if (rider == null || rider.getRole() != User.Role.RIDER) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Rider not found"));
+        }
+
+        List<Map<String, Object>> history =
+                rideRepository.findByRiderId(riderId)
+                        .stream()
+                        .map(this::convertRideToResponse)
+                        .toList();
+
+        return ResponseEntity.ok(history);
+    }
+
+    // View driver ride history
+    @GetMapping("/driver/{driverId}")
+    public ResponseEntity<?> getDriverHistory(
+            @PathVariable Long driverId) {
+
+        User driver = userRepository.findById(driverId)
+                .orElse(null);
+
+        if (driver == null || driver.getRole() != User.Role.DRIVER) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Driver not found"));
+        }
+
+        List<Map<String, Object>> history =
+                rideRepository.findByDriverId(driverId)
+                        .stream()
+                        .map(this::convertRideToResponse)
+                        .toList();
+
+        return ResponseEntity.ok(history);
+    }
+
+    // Convert ride entity into a safe API response
+    private Map<String, Object> convertRideToResponse(Ride ride) {
+
+        return Map.of(
+                "rideId", ride.getId(),
+                "riderName", ride.getRider().getName(),
+                "driverName", ride.getDriver() != null
+                        ? ride.getDriver().getName()
+                        : "Not assigned",
+                "pickupLocation", ride.getPickupLocation(),
+                "dropLocation", ride.getDropLocation(),
+                "fare", ride.getFare(),
+                "status", ride.getStatus().toString(),
+                "createdAt", ride.getCreatedAt().toString()
+        );
     }
 }
