@@ -203,6 +203,66 @@ public class RideController {
                 "status", Ride.RideStatus.ACCEPTED.toString()
         ));
     }
+    
+    // Update ride status by the assigned driver
+    @PutMapping("/{rideId}/status/{driverId}")
+    public ResponseEntity<?> updateRideStatus(
+            @PathVariable Long rideId,
+            @PathVariable Long driverId,
+            @RequestBody Map<String, String> request) {
+
+        Ride ride = rideRepository.findById(rideId)
+                .orElse(null);
+
+        if (ride == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Ride not found"));
+        }
+
+        if (ride.getDriver() == null
+                || !ride.getDriver().getId().equals(driverId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of(
+                            "message",
+                            "You are not authorized to update this ride"
+                    ));
+        }
+
+        String newStatus = request.get("status");
+
+        if (newStatus == null) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("message", "Status is required"));
+        }
+
+        Ride.RideStatus currentStatus = ride.getStatus();
+
+        if ("ONGOING".equalsIgnoreCase(newStatus)
+                && currentStatus == Ride.RideStatus.ACCEPTED) {
+
+            ride.setStatus(Ride.RideStatus.ONGOING);
+
+        } else if ("COMPLETED".equalsIgnoreCase(newStatus)
+                && currentStatus == Ride.RideStatus.ONGOING) {
+
+            ride.setStatus(Ride.RideStatus.COMPLETED);
+
+        } else {
+            return ResponseEntity.badRequest()
+                    .body(Map.of(
+                            "message",
+                            "Invalid ride status transition"
+                    ));
+        }
+
+        Ride updatedRide = rideRepository.save(ride);
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Ride status updated successfully",
+                "rideId", updatedRide.getId(),
+                "status", updatedRide.getStatus().toString()
+        ));
+    }
 
 
 
