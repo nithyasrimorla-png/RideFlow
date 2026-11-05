@@ -158,6 +158,53 @@ public class RideController {
         return ResponseEntity.ok(availableRides);
     }
 
+    
+    // Driver accepts a ride request
+    @PutMapping("/{rideId}/accept/{driverId}")
+    public ResponseEntity<?> acceptRide(
+            @PathVariable Long rideId,
+            @PathVariable Long driverId) {
+
+        User driver = userRepository.findById(driverId)
+                .orElse(null);
+
+        if (driver == null || driver.getRole() != User.Role.DRIVER) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Driver not found"));
+        }
+
+        Ride ride = rideRepository.findById(rideId)
+                .orElse(null);
+
+        if (ride == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Ride not found"));
+        }
+
+        int updatedRows = rideRepository.assignDriverIfAvailable(
+                rideId,
+                driver,
+                Ride.RideStatus.REQUESTED,
+                Ride.RideStatus.ACCEPTED
+        );
+
+        if (updatedRows == 0) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of(
+                            "message",
+                            "Ride is no longer available for acceptance"
+                    ));
+        }
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Ride accepted successfully",
+                "rideId", rideId,
+                "driverName", driver.getName(),
+                "status", Ride.RideStatus.ACCEPTED.toString()
+        ));
+    }
+
+
 
   
     private Map<String, Object> convertRideToResponse(Ride ride) {
