@@ -5,6 +5,7 @@ import com.rideflow.entity.Ride;
 import com.rideflow.entity.User;
 import com.rideflow.repository.RideRepository;
 import com.rideflow.repository.UserRepository;
+import com.rideflow.service.FareService;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,38 +21,52 @@ public class RideController {
 
     private final RideRepository rideRepository;
     private final UserRepository userRepository;
+    private final FareService fareService;
 
     public RideController(
             RideRepository rideRepository,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            FareService fareService) {
+
         this.rideRepository = rideRepository;
         this.userRepository = userRepository;
+        this.fareService = fareService;
     }
 
-    // Book a new ride
+    // Book a new ride with automatic fare calculation
     @PostMapping("/book")
     public ResponseEntity<?> bookRide(
             @RequestBody Map<String, Object> request) {
 
+        if (request.get("riderId") == null
+                || request.get("pickupLocation") == null
+                || request.get("dropLocation") == null
+                || request.get("distanceKm") == null) {
+
+            return ResponseEntity.badRequest()
+                    .body(Map.of("message",
+                            "Rider ID, pickup, drop and distance are required"));
+        }
+
         try {
-            Long riderId = Long.valueOf(
+            Long riderId = Long.parseLong(
                     request.get("riderId").toString());
 
             String pickupLocation =
-                    request.get("pickupLocation").toString();
+                    request.get("pickupLocation").toString().trim();
 
             String dropLocation =
-                    request.get("dropLocation").toString();
+                    request.get("dropLocation").toString().trim();
 
-            Double fare = Double.valueOf(
-                    request.get("fare").toString());
+            double distanceKm = Double.parseDouble(
+                    request.get("distanceKm").toString());
 
             if (pickupLocation.isBlank()
-                    || dropLocation.isBlank()
-                    || fare <= 0) {
+                    || dropLocation.isBlank()) {
+
                 return ResponseEntity.badRequest()
                         .body(Map.of("message",
-                                "Invalid ride details"));
+                                "Pickup and drop locations cannot be empty"));
             }
 
             User rider = userRepository.findById(riderId)
@@ -59,16 +74,26 @@ public class RideController {
 
             if (rider == null
                     || rider.getRole() != User.Role.RIDER) {
+
                 return ResponseEntity.badRequest()
                         .body(Map.of("message",
                                 "Valid rider account not found"));
             }
 
+            // Calculate fare using FareService
+            Map<String, Object> fareDetails =
+                    fareService.calculateFare(distanceKm);
+
+            Double calculatedFare =
+                    ((Number) fareDetails.get("totalFare"))
+                            .doubleValue();
+
+            // Create ride
             Ride ride = new Ride();
             ride.setRider(rider);
             ride.setPickupLocation(pickupLocation);
             ride.setDropLocation(dropLocation);
-            ride.setFare(fare);
+            ride.setFare(calculatedFare);
 
             Ride savedRide = rideRepository.save(ride);
 
@@ -81,18 +106,25 @@ public class RideController {
                             savedRide.getPickupLocation(),
                             "dropLocation",
                             savedRide.getDropLocation(),
+                            "distanceKm", distanceKm,
                             "fare", savedRide.getFare(),
+                            "fareBreakdown", fareDetails,
                             "status",
                             savedRide.getStatus().toString()
                     ));
 
-        } catch (Exception e) {
+        } catch (NumberFormatException e) {
             return ResponseEntity.badRequest()
                     .body(Map.of("message",
-                            "Please provide valid ride details"));
+                            "Invalid rider ID or distance"));
+
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("message", e.getMessage()));
         }
     }
 
+    // View rider ride history
     @GetMapping("/rider/{riderId}")
     public ResponseEntity<?> getRiderHistory(
             @PathVariable Long riderId) {
@@ -100,7 +132,9 @@ public class RideController {
         User rider = userRepository.findById(riderId)
                 .orElse(null);
 
-        if (rider == null || rider.getRole() != User.Role.RIDER) {
+        if (rider == null
+                || rider.getRole() != User.Role.RIDER) {
+
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("message", "Rider not found"));
         }
@@ -122,7 +156,9 @@ public class RideController {
         User driver = userRepository.findById(driverId)
                 .orElse(null);
 
-        if (driver == null || driver.getRole() != User.Role.DRIVER) {
+        if (driver == null
+                || driver.getRole() != User.Role.DRIVER) {
+
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("message", "Driver not found"));
         }
@@ -135,8 +171,8 @@ public class RideController {
 
         return ResponseEntity.ok(history);
     }
-    
-    
+
+    // View available rides for drivers
     @GetMapping("/available/{driverId}")
     public ResponseEntity<?> getAvailableRides(
             @PathVariable Long driverId) {
@@ -144,7 +180,9 @@ public class RideController {
         User driver = userRepository.findById(driverId)
                 .orElse(null);
 
-        if (driver == null || driver.getRole() != User.Role.DRIVER) {
+        if (driver == null
+                || driver.getRole() != User.Role.DRIVER) {
+
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("message", "Driver not found"));
         }
@@ -158,7 +196,6 @@ public class RideController {
         return ResponseEntity.ok(availableRides);
     }
 
-    
     // Driver accepts a ride request
     @PutMapping("/{rideId}/accept/{driverId}")
     public ResponseEntity<?> acceptRide(
@@ -168,7 +205,9 @@ public class RideController {
         User driver = userRepository.findById(driverId)
                 .orElse(null);
 
-        if (driver == null || driver.getRole() != User.Role.DRIVER) {
+        if (driver == null
+                || driver.getRole() != User.Role.DRIVER) {
+
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("message", "Driver not found"));
         }
@@ -203,8 +242,8 @@ public class RideController {
                 "status", Ride.RideStatus.ACCEPTED.toString()
         ));
     }
-    
-    // Update ride status by the assigned driver
+
+    // Update ride status by assigned driver
     @PutMapping("/{rideId}/status/{driverId}")
     public ResponseEntity<?> updateRideStatus(
             @PathVariable Long rideId,
@@ -219,8 +258,19 @@ public class RideController {
                     .body(Map.of("message", "Ride not found"));
         }
 
+        User driver = userRepository.findById(driverId)
+                .orElse(null);
+
+        if (driver == null
+                || driver.getRole() != User.Role.DRIVER) {
+
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Driver not found"));
+        }
+
         if (ride.getDriver() == null
                 || !ride.getDriver().getId().equals(driverId)) {
+
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of(
                             "message",
@@ -230,7 +280,7 @@ public class RideController {
 
         String newStatus = request.get("status");
 
-        if (newStatus == null) {
+        if (newStatus == null || newStatus.isBlank()) {
             return ResponseEntity.badRequest()
                     .body(Map.of("message", "Status is required"));
         }
@@ -264,7 +314,6 @@ public class RideController {
         ));
     }
 
-    
     // Cancel a ride request
     @PutMapping("/{rideId}/cancel/{userId}")
     public ResponseEntity<?> cancelRide(
@@ -287,38 +336,45 @@ public class RideController {
                     .body(Map.of("message", "User not found"));
         }
 
-        boolean isRider = user.getRole() == User.Role.RIDER
+        boolean isRider =
+                user.getRole() == User.Role.RIDER
                 && ride.getRider().getId().equals(userId);
 
-        boolean isDriver = user.getRole() == User.Role.DRIVER
+        boolean isDriver =
+                user.getRole() == User.Role.DRIVER
                 && ride.getDriver() != null
                 && ride.getDriver().getId().equals(userId);
 
         if (!isRider && !isDriver) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("message", "Not authorized to cancel this ride"));
+                    .body(Map.of(
+                            "message",
+                            "Not authorized to cancel this ride"
+                    ));
         }
 
         if (ride.getStatus() != Ride.RideStatus.REQUESTED
                 && ride.getStatus() != Ride.RideStatus.ACCEPTED) {
+
             return ResponseEntity.badRequest()
-                    .body(Map.of("message", "This ride cannot be cancelled"));
+                    .body(Map.of(
+                            "message",
+                            "This ride cannot be cancelled"
+                    ));
         }
 
         ride.setStatus(Ride.RideStatus.CANCELLED);
-        rideRepository.save(ride);
+
+        Ride cancelledRide = rideRepository.save(ride);
 
         return ResponseEntity.ok(Map.of(
                 "message", "Ride cancelled successfully",
-                "rideId", ride.getId(),
-                "status", ride.getStatus().toString()
+                "rideId", cancelledRide.getId(),
+                "status", cancelledRide.getStatus().toString()
         ));
     }
 
-
-
-
-  
+    // Convert ride entity into API response
     private Map<String, Object> convertRideToResponse(Ride ride) {
 
         return Map.of(
