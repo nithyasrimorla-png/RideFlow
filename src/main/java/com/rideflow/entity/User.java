@@ -25,6 +25,9 @@ public class User {
     @Enumerated(EnumType.STRING)
     private Role role;
 
+    @Column(nullable = false)
+    private boolean available = false;
+
     private LocalDateTime createdAt = LocalDateTime.now();
 
     public User() {
@@ -76,6 +79,14 @@ public class User {
 
     public void setRole(Role role) {
         this.role = role;
+    }
+
+    public boolean isAvailable() {
+        return available;
+    }
+
+    public void setAvailable(boolean available) {
+        this.available = available;
     }
 
     public LocalDateTime getCreatedAt() {

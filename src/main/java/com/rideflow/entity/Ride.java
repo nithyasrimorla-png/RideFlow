@@ -1,100 +1,47 @@
+package com.rideflow.controller;
 
-package com.rideflow.entity;
+import com.rideflow.service.FareService;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
-import jakarta.persistence.*;
-import java.time.LocalDateTime;
+import java.util.Map;
 
-@Entity
-@Table(name = "rides")
-public class Ride {
+@RestController
+@RequestMapping("/api/fares")
+@CrossOrigin(origins = "*")
+public class FareController {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private final FareService fareService;
 
-    @ManyToOne
-    @JoinColumn(name = "rider_id", nullable = false)
-    private User rider;
-
-    @ManyToOne
-    @JoinColumn(name = "driver_id")
-    private User driver;
-
-    private String pickupLocation;
-
-    private String dropLocation;
-
-    private Double fare;
-
-    @Enumerated(EnumType.STRING)
-    private RideStatus status = RideStatus.REQUESTED;
-
-    private LocalDateTime createdAt = LocalDateTime.now();
-
-    public Ride() {
+    public FareController(FareService fareService) {
+        this.fareService = fareService;
     }
 
-    public Long getId() {
-        return id;
-    }
+    @PostMapping("/calculate")
+    public ResponseEntity<?> calculateFare(
+            @RequestBody Map<String, Object> request) {
+        try {
+            Object distanceValue = request.get("distanceKm");
 
-    public User getRider() {
-        return rider;
-    }
+            if (distanceValue == null) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("message", "Distance is required"));
+            }
 
-    public void setRider(User rider) {
-        this.rider = rider;
-    }
+            double distanceKm =
+                    Double.parseDouble(distanceValue.toString());
 
-    public User getDriver() {
-        return driver;
-    }
+            Map<String, Object> fareDetails =
+                    fareService.calculateFare(distanceKm);
 
-    public void setDriver(User driver) {
-        this.driver = driver;
-    }
+            return ResponseEntity.ok(fareDetails);
 
-    public String getPickupLocation() {
-        return pickupLocation;
-    }
-
-    public void setPickupLocation(String pickupLocation) {
-        this.pickupLocation = pickupLocation;
-    }
-
-    public String getDropLocation() {
-        return dropLocation;
-    }
-
-    public void setDropLocation(String dropLocation) {
-        this.dropLocation = dropLocation;
-    }
-
-    public Double getFare() {
-        return fare;
-    }
-
-    public void setFare(Double fare) {
-        this.fare = fare;
-    }
-
-    public RideStatus getStatus() {
-        return status;
-    }
-
-    public void setStatus(RideStatus status) {
-        this.status = status;
-    }
-
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public enum RideStatus {
-        REQUESTED,
-        ACCEPTED,
-        ONGOING,
-        COMPLETED,
-        CANCELLED
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of(
+                            "message",
+                            "Please provide a valid distance greater than zero"
+                    ));
+        }
     }
 }
