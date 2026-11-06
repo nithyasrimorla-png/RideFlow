@@ -80,7 +80,6 @@ public class RideController {
                                 "Valid rider account not found"));
             }
 
-            // Calculate fare using FareService
             Map<String, Object> fareDetails =
                     fareService.calculateFare(distanceKm);
 
@@ -88,7 +87,6 @@ public class RideController {
                     ((Number) fareDetails.get("totalFare"))
                             .doubleValue();
 
-            // Create ride
             Ride ride = new Ride();
             ride.setRider(rider);
             ride.setPickupLocation(pickupLocation);
@@ -102,15 +100,12 @@ public class RideController {
                             "message", "Ride booked successfully",
                             "rideId", savedRide.getId(),
                             "riderName", rider.getName(),
-                            "pickupLocation",
-                            savedRide.getPickupLocation(),
-                            "dropLocation",
-                            savedRide.getDropLocation(),
+                            "pickupLocation", savedRide.getPickupLocation(),
+                            "dropLocation", savedRide.getDropLocation(),
                             "distanceKm", distanceKm,
                             "fare", savedRide.getFare(),
                             "fareBreakdown", fareDetails,
-                            "status",
-                            savedRide.getStatus().toString()
+                            "status", savedRide.getStatus().toString()
                     ));
 
         } catch (NumberFormatException e) {
@@ -142,7 +137,7 @@ public class RideController {
         List<Map<String, Object>> history =
                 rideRepository.findByRiderId(riderId)
                         .stream()
-                        .map(this::convertRideToResponse)
+                        .<Map<String, Object>>map(this::convertRideToResponse)
                         .toList();
 
         return ResponseEntity.ok(history);
@@ -166,7 +161,7 @@ public class RideController {
         List<Map<String, Object>> history =
                 rideRepository.findByDriverId(driverId)
                         .stream()
-                        .map(this::convertRideToResponse)
+                        .<Map<String, Object>>map(this::convertRideToResponse)
                         .toList();
 
         return ResponseEntity.ok(history);
@@ -190,7 +185,7 @@ public class RideController {
         List<Map<String, Object>> availableRides =
                 rideRepository.findByStatus(Ride.RideStatus.REQUESTED)
                         .stream()
-                        .map(this::convertRideToResponse)
+                        .<Map<String, Object>>map(this::convertRideToResponse)
                         .toList();
 
         return ResponseEntity.ok(availableRides);

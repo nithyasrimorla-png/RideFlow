@@ -43,7 +43,7 @@ public class FareController {
 
             return ResponseEntity.ok(fareDetails);
 
-        } catch (NumberFormatException | IllegalArgumentException e) {
+        } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest()
                     .body(Map.of(
                             "message",
