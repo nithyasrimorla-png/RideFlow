@@ -2,7 +2,9 @@
 package com.rideflow.controller;
 
 import com.rideflow.entity.User;
+import com.rideflow.entity.Ride;
 import com.rideflow.repository.UserRepository;
+import com.rideflow.repository.RideRepository;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,9 +19,13 @@ import java.util.Map;
 public class DriverController {
 
     private final UserRepository userRepository;
+    private final RideRepository rideRepository;
 
-    public DriverController(UserRepository userRepository) {
+    public DriverController(
+            UserRepository userRepository,
+            RideRepository rideRepository) {
         this.userRepository = userRepository;
+        this.rideRepository = rideRepository;
     }
 
     @PutMapping("/{driverId}/availability")
@@ -106,6 +112,60 @@ public class DriverController {
                 Map.of(
                         "totalAvailableDrivers", response.size(),
                         "drivers", response
+                )
+        );
+    }
+
+    @GetMapping("/{driverId}/dashboard")
+    public ResponseEntity<?> getDriverDashboard(
+            @PathVariable Long driverId) {
+
+        User driver = userRepository.findById(driverId).orElse(null);
+
+        if (driver == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Driver not found"));
+        }
+
+        if (driver.getRole() != User.Role.DRIVER) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("message", "User is not a driver"));
+        }
+
+        long totalRides = rideRepository.countByDriverId(driverId);
+
+        long completedRides = rideRepository.countByDriverIdAndStatus(
+                driverId,
+                Ride.RideStatus.COMPLETED
+        );
+
+        long acceptedRides = rideRepository.countByDriverIdAndStatus(
+                driverId,
+                Ride.RideStatus.ACCEPTED
+        );
+
+        long ongoingRides = rideRepository.countByDriverIdAndStatus(
+                driverId,
+                Ride.RideStatus.ONGOING
+        );
+
+        long activeRides = acceptedRides + ongoingRides;
+
+        Double earnings = rideRepository.calculateDriverEarnings(
+                driverId,
+                Ride.RideStatus.COMPLETED
+        );
+
+        return ResponseEntity.ok(
+                Map.of(
+                        "driverId", driver.getId(),
+                        "driverName", driver.getName(),
+                        "availability", driver.isAvailable() ? "ONLINE" : "OFFLINE",
+                        "totalRides", totalRides,
+                        "completedRides", completedRides,
+                        "activeRides", activeRides,
+                        "totalEarnings", earnings != null ? earnings : 0.0,
+                        "currency", "INR"
                 )
         );
     }
