@@ -951,3 +951,641 @@ button {
     margin-bottom: 27px;
   }
 }
+.rider-dashboard {
+  min-height: 100vh;
+  background: #f7f9f6;
+  color: #193d32;
+}
+
+.rider-topbar {
+  min-height: 78px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 7%;
+  background: #ffffff;
+  border-bottom: 1px solid #e9eee8;
+}
+
+.rider-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #174d3c;
+  font-size: 25px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.rider-brand > span:last-child span {
+  color: #c58d3c;
+}
+
+.rider-brand-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rider-topbar-right,
+.rider-profile {
+  display: flex;
+  align-items: center;
+}
+
+.rider-topbar-right {
+  gap: 28px;
+}
+
+.rider-profile {
+  gap: 11px;
+}
+
+.rider-avatar {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #e8f0e9;
+  color: #174d3c;
+  font-weight: 800;
+}
+
+.rider-profile strong,
+.rider-profile small {
+  display: block;
+}
+
+.rider-profile strong {
+  font-size: 13px;
+}
+
+.rider-profile small {
+  margin-top: 3px;
+  color: #89958c;
+  font-size: 11px;
+}
+
+.rider-logout {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid #e2e9e1;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #52685a;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.rider-logout:hover {
+  border-color: #174d3c;
+  color: #174d3c;
+}
+
+.rider-main {
+  width: min(1160px, 88%);
+  margin: 0 auto;
+  padding: 48px 0 65px;
+}
+
+.rider-welcome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 30px;
+}
+
+.rider-eyebrow {
+  color: #b17b32;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.8px;
+}
+
+.rider-welcome h1 {
+  margin: 9px 0 5px;
+  color: #193d32;
+  font-size: 34px;
+  letter-spacing: -1px;
+}
+
+.rider-welcome p {
+  margin: 0;
+  color: #839087;
+  font-size: 14px;
+}
+
+.rider-welcome-icon {
+  width: 76px;
+  height: 76px;
+  display: grid;
+  place-items: center;
+  border-radius: 22px;
+  background: #e8f0e9;
+  color: #174d3c;
+}
+
+.rider-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 17px;
+  margin-bottom: 28px;
+}
+
+.rider-stat-card {
+  min-height: 100px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 20px;
+  border: 1px solid #e9eee8;
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.rider-stat-icon {
+  width: 43px;
+  height: 43px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: #edf4ed;
+  color: #245c43;
+}
+
+.rider-stat-card span,
+.rider-stat-card strong {
+  display: block;
+}
+
+.rider-stat-card span {
+  color: #849087;
+  font-size: 12px;
+}
+
+.rider-stat-card strong {
+  margin-top: 5px;
+  color: #193d32;
+  font-size: 23px;
+}
+
+.rider-content-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: start;
+  gap: 22px;
+}
+
+.booking-card,
+.ride-history-card {
+  min-width: 0;
+  padding: 27px;
+  border: 1px solid #e9eee8;
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.rider-card-heading,
+.ride-history-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 15px;
+  margin-bottom: 25px;
+}
+
+.rider-card-heading h2,
+.ride-history-heading h2 {
+  margin: 7px 0;
+  color: #193d32;
+  font-size: 23px;
+  letter-spacing: -0.5px;
+}
+
+.rider-card-heading p {
+  margin: 0;
+  color: #89958c;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.booking-heading-icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: #edf4ed;
+  color: #245c43;
+}
+
+.booking-card form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.booking-card form label {
+  margin-top: 8px;
+  color: #45594b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rider-location-input {
+  min-height: 49px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 0 13px;
+  border: 1px solid #e2e9e1;
+  border-radius: 9px;
+  background: #fbfcfa;
+  color: #829087;
+}
+
+.rider-location-input:focus-within {
+  border-color: #477b62;
+  box-shadow: 0 0 0 3px rgba(71, 123, 98, 0.08);
+}
+
+.rider-location-input input {
+  width: 100%;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #263c31;
+  font-size: 13px;
+}
+
+.rider-location-input input::placeholder {
+  color: #a6afa8;
+}
+
+.rider-estimate-button,
+.rider-book-button {
+  min-height: 49px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border: none;
+  border-radius: 9px;
+  background: #174d3c;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.rider-estimate-button {
+  margin-top: 12px;
+}
+
+.rider-estimate-button:hover,
+.rider-book-button:hover {
+  background: #103c2e;
+}
+
+.rider-estimate-button:disabled,
+.rider-book-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.fare-result {
+  margin-top: 23px;
+  padding: 18px;
+  border: 1px solid #e1ebdf;
+  border-radius: 12px;
+  background: #f6faf5;
+}
+
+.fare-result-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #245c43;
+}
+
+.fare-result-heading span,
+.fare-result-heading strong {
+  display: block;
+}
+
+.fare-result-heading span {
+  color: #859187;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.fare-result-heading strong {
+  margin-top: 6px;
+  color: #174d3c;
+  font-size: 28px;
+}
+
+.fare-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 17px 0;
+  padding: 15px 0;
+  border-top: 1px solid #e3ebe1;
+  border-bottom: 1px solid #e3ebe1;
+}
+
+.fare-breakdown div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.fare-breakdown span {
+  color: #849087;
+}
+
+.fare-breakdown strong {
+  color: #405548;
+}
+
+.rider-book-button {
+  width: 100%;
+}
+
+.fare-disclaimer {
+  margin: 16px 0 0;
+  color: #9aa39c;
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.rider-alert {
+  margin-bottom: 16px;
+  padding: 12px;
+  border-radius: 9px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.rider-alert-error {
+  border: 1px solid #f1d5d1;
+  background: #fff4f2;
+  color: #a13e32;
+}
+
+.rider-alert-success {
+  border: 1px solid #d8eadb;
+  background: #f0f8f0;
+  color: #28613d;
+}
+
+.ride-refresh-button {
+  width: 37px;
+  height: 37px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #e2e9e1;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #52705d;
+  cursor: pointer;
+}
+
+.ride-refresh-button:hover {
+  background: #f2f7f1;
+}
+
+.ride-empty-state {
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #87938a;
+  text-align: center;
+  font-size: 13px;
+}
+
+.ride-empty-icon {
+  width: 65px;
+  height: 65px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 14px;
+  border-radius: 50%;
+  background: #edf4ed;
+  color: #245c43;
+}
+
+.ride-empty-state h3 {
+  margin: 0 0 7px;
+  color: #355344;
+  font-size: 16px;
+}
+
+.ride-empty-state p {
+  margin: 0;
+  font-size: 12px;
+}
+
+.ride-list {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  max-height: 560px;
+  overflow-y: auto;
+}
+
+.ride-history-item {
+  padding: 16px;
+  border: 1px solid #e9eee8;
+  border-radius: 11px;
+  background: #fdfefd;
+}
+
+.ride-history-top,
+.ride-history-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ride-id {
+  color: #849087;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.ride-status {
+  padding: 5px 9px;
+  border-radius: 20px;
+  background: #edf1ed;
+  color: #5e6e62;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.ride-status-requested {
+  background: #fff4df;
+  color: #9b702c;
+}
+
+.ride-status-accepted,
+.ride-status-ongoing {
+  background: #e7f0ff;
+  color: #3d639b;
+}
+
+.ride-status-completed {
+  background: #e8f5eb;
+  color: #34734a;
+}
+
+.ride-status-cancelled {
+  background: #fff0ed;
+  color: #a34c3c;
+}
+
+.ride-route {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  margin: 18px 0;
+  padding-left: 3px;
+}
+
+.ride-route-line {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  color: #405548;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.route-dot {
+  width: 9px;
+  height: 9px;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+
+.pickup-dot {
+  background: #43845d;
+}
+
+.drop-dot {
+  background: #c58d3c;
+}
+
+.ride-history-bottom {
+  padding-top: 12px;
+  border-top: 1px solid #edf0eb;
+}
+
+.ride-history-bottom span {
+  color: #929d94;
+  font-size: 10px;
+}
+
+.ride-history-bottom strong {
+  color: #174d3c;
+  font-size: 14px;
+}
+
+.ride-driver-name {
+  margin-top: 10px;
+  color: #7c8b80;
+  font-size: 11px;
+}
+
+@media (max-width: 950px) {
+  .rider-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rider-content-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .rider-topbar {
+    padding: 0 5%;
+  }
+
+  .rider-topbar-right {
+    gap: 12px;
+  }
+
+  .rider-profile {
+    gap: 7px;
+  }
+
+  .rider-profile strong {
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .rider-logout {
+    padding: 9px;
+  }
+
+  .rider-logout span {
+    display: none;
+  }
+
+  .rider-main {
+    width: 90%;
+    padding-top: 32px;
+  }
+
+  .rider-welcome h1 {
+    font-size: 28px;
+  }
+
+  .rider-welcome-icon {
+    width: 58px;
+    height: 58px;
+  }
+
+  .rider-stats {
+    gap: 10px;
+  }
+
+  .rider-stat-card {
+    min-height: 85px;
+    gap: 9px;
+    padding: 12px;
+  }
+
+  .rider-stat-icon {
+    width: 35px;
+    height: 35px;
+  }
+
+  .rider-stat-card span {
+    font-size: 10px;
+  }
+
+  .rider-stat-card strong {
+    font-size: 20px;
+  }
+
+  .booking-card,
+  .ride-history-card {
+    padding: 20px 16px;
+  }
+}
