@@ -20,6 +20,21 @@ public interface RideRepository extends JpaRepository<Ride, Long> {
 
     List<Ride> findByStatus(Ride.RideStatus status);
 
+    long countByDriverId(Long driverId);
+
+    long countByDriverIdAndStatus(
+            Long driverId,
+            Ride.RideStatus status
+    );
+
+    @Query("SELECT COALESCE(SUM(r.fare), 0) FROM Ride r " +
+           "WHERE r.driver.id = :driverId " +
+           "AND r.status = :status")
+    Double calculateDriverEarnings(
+            @Param("driverId") Long driverId,
+            @Param("status") Ride.RideStatus status
+    );
+
     @Modifying
     @Transactional
     @Query("UPDATE Ride r SET r.driver = :driver, r.status = :acceptedStatus " +
