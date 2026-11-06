@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -21,7 +22,6 @@ public class DriverController {
         this.userRepository = userRepository;
     }
 
-    // Update driver availability
     @PutMapping("/{driverId}/availability")
     public ResponseEntity<?> updateAvailability(
             @PathVariable Long driverId,
@@ -58,7 +58,6 @@ public class DriverController {
         );
     }
 
-    // Get driver availability
     @GetMapping("/{driverId}/availability")
     public ResponseEntity<?> getAvailability(
             @PathVariable Long driverId) {
@@ -81,6 +80,32 @@ public class DriverController {
                         "name", driver.getName(),
                         "available", driver.isAvailable(),
                         "status", driver.isAvailable() ? "ONLINE" : "OFFLINE"
+                )
+        );
+    }
+
+    @GetMapping("/available")
+    public ResponseEntity<?> getAvailableDrivers() {
+
+        List<User> drivers = userRepository.findByRoleAndAvailable(
+                User.Role.DRIVER,
+                true
+        );
+
+        List<Map<String, Object>> response = drivers.stream()
+                .map(driver -> Map.<String, Object>of(
+                        "driverId", driver.getId(),
+                        "name", driver.getName(),
+                        "phone", driver.getPhone(),
+                        "available", driver.isAvailable(),
+                        "status", "ONLINE"
+                ))
+                .toList();
+
+        return ResponseEntity.ok(
+                Map.of(
+                        "totalAvailableDrivers", response.size(),
+                        "drivers", response
                 )
         );
     }
