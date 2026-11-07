@@ -11,7 +11,8 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./RideLocationPicker.css";
 
-const DEFAULT_CENTER = [13.0827, 80.2707]; // Chennai demo map
+const DEFAULT_CENTER = [13.0827, 80.2707];
+const GEOCODING_API = "http://localhost:8080/api/geocoding/reverse";
 
 const pickupIcon = L.divIcon({
   className: "ride-map-marker",
@@ -26,6 +27,12 @@ const dropIcon = L.divIcon({
   iconSize: [34, 34],
   iconAnchor: [17, 17],
 });
+
+function formatCoordinates(coordinates) {
+  if (!coordinates) return "";
+
+  return `Lat: ${coordinates[0].toFixed(5)}, Lng: ${coordinates[1].toFixed(5)}`;
+}
 
 function MapClickHandler({ onMapClick }) {
   useMapEvents({
@@ -43,31 +50,58 @@ function MapClickHandler({ onMapClick }) {
 function RideLocationPicker({ onRouteChange, resetKey }) {
   const [pickup, setPickup] = useState(null);
   const [destination, setDestination] = useState(null);
+
+  const [pickupAddress, setPickupAddress] = useState("");
+  const [destinationAddress, setDestinationAddress] = useState("");
+
+  const [addressLoading, setAddressLoading] = useState(false);
+  const [addressError, setAddressError] = useState("");
+
   const [routeCoordinates, setRouteCoordinates] = useState([]);
   const [distanceKm, setDistanceKm] = useState(null);
   const [loadingRoute, setLoadingRoute] = useState(false);
   const [routeError, setRouteError] = useState("");
 
-  // Reset the map whenever the parent increments resetKey.
+  const [routeData, setRouteData] = useState(null);
+  const [addressLookupComplete, setAddressLookupComplete] =
+    useState(false);
+
+  // Reset map after successful booking.
   useEffect(() => {
     setPickup(null);
     setDestination(null);
+
+    setPickupAddress("");
+    setDestinationAddress("");
+
+    setAddressLoading(false);
+    setAddressError("");
+
     setRouteCoordinates([]);
     setDistanceKm(null);
-    setRouteError("");
     setLoadingRoute(false);
+    setRouteError("");
+
+    setRouteData(null);
+    setAddressLookupComplete(false);
 
     onRouteChange?.(null);
   }, [resetKey, onRouteChange]);
 
   const handleMapClick = (coordinates) => {
     setRouteError("");
+    setAddressError("");
 
     if (!pickup || (pickup && destination)) {
       setPickup(coordinates);
       setDestination(null);
+
+      setPickupAddress("");
+      setDestinationAddress("");
+
       setRouteCoordinates([]);
       setDistanceKm(null);
+      setRouteData(null);
 
       onRouteChange?.(null);
       return;
@@ -79,17 +113,113 @@ function RideLocationPicker({ onRouteChange, resetKey }) {
   const clearLocations = () => {
     setPickup(null);
     setDestination(null);
+
+    setPickupAddress("");
+    setDestinationAddress("");
+
+    setAddressLoading(false);
+    setAddressError("");
+
     setRouteCoordinates([]);
     setDistanceKm(null);
+    setRouteData(null);
+
     setRouteError("");
     setLoadingRoute(false);
 
     onRouteChange?.(null);
   };
 
+  // Resolve selected coordinates into readable addresses.
+  useEffect(() => {
+    if (!pickup && !destination) {
+      setAddressLookupComplete(false);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    const getAddress = async (coordinates) => {
+      const [latitude, longitude] = coordinates;
+
+      const response = await fetch(
+        `${GEOCODING_API}?lat=${latitude}&lon=${longitude}`,
+        { signal: controller.signal }
+      );
+
+      if (!response.ok) {
+        throw new Error("Address lookup unavailable.");
+      }
+
+      const data = await response.json();
+
+      if (!data.address) {
+        throw new Error("No readable address found.");
+      }
+
+      return data.address;
+    };
+
+    const lookupAddresses = async () => {
+      setAddressLookupComplete(false);
+      setAddressLoading(true);
+      setAddressError("");
+
+      setPickupAddress("");
+      setDestinationAddress("");
+
+      try {
+        if (pickup) {
+          try {
+            const address = await getAddress(pickup);
+
+            if (!controller.signal.aborted) {
+              setPickupAddress(address);
+            }
+          } catch (error) {
+            if (error.name === "AbortError") return;
+            setAddressError("Pickup address unavailable. Using coordinates.");
+          }
+        }
+
+        // Respect Nominatim's public service request interval.
+        if (pickup && destination) {
+          await new Promise((resolve) => setTimeout(resolve, 1100));
+
+          if (controller.signal.aborted) return;
+        }
+
+        if (destination) {
+          try {
+            const address = await getAddress(destination);
+
+            if (!controller.signal.aborted) {
+              setDestinationAddress(address);
+            }
+          } catch (error) {
+            if (error.name === "AbortError") return;
+            setAddressError("Destination address unavailable. Using coordinates.");
+          }
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setAddressLoading(false);
+          setAddressLookupComplete(true);
+        }
+      }
+    };
+
+    lookupAddresses();
+
+    return () => controller.abort();
+  }, [pickup, destination]);
+
   // Calculate driving route using OSRM.
   useEffect(() => {
-    if (!pickup || !destination) return;
+    if (!pickup || !destination) {
+      setRouteData(null);
+      return;
+    }
 
     const controller = new AbortController();
 
@@ -98,8 +228,7 @@ function RideLocationPicker({ onRouteChange, resetKey }) {
       setRouteError("");
       setDistanceKm(null);
       setRouteCoordinates([]);
-
-      onRouteChange?.(null);
+      setRouteData(null);
 
       try {
         const [pickupLat, pickupLng] = pickup;
@@ -121,9 +250,7 @@ function RideLocationPicker({ onRouteChange, resetKey }) {
         const data = await response.json();
 
         if (data.code !== "Ok" || !data.routes?.length) {
-          throw new Error(
-            "No driving route found between these locations."
-          );
+          throw new Error("No driving route found between these locations.");
         }
 
         const route = data.routes[0];
@@ -139,7 +266,7 @@ function RideLocationPicker({ onRouteChange, resetKey }) {
         setRouteCoordinates(coordinates);
         setDistanceKm(calculatedDistance);
 
-        onRouteChange?.({
+        setRouteData({
           pickup,
           destination,
           distanceKm: calculatedDistance,
@@ -160,7 +287,32 @@ function RideLocationPicker({ onRouteChange, resetKey }) {
     getRoute();
 
     return () => controller.abort();
-  }, [pickup, destination, onRouteChange]);
+  }, [pickup, destination]);
+
+  // Send the completed route and resolved addresses to the dashboard.
+  useEffect(() => {
+    if (!routeData || !addressLookupComplete) return;
+
+    onRouteChange?.({
+      ...routeData,
+      pickupAddress: pickupAddress || null,
+      destinationAddress: destinationAddress || null,
+    });
+  }, [
+    routeData,
+    addressLookupComplete,
+    pickupAddress,
+    destinationAddress,
+    onRouteChange,
+  ]);
+
+  const pickupDisplay = pickup
+    ? pickupAddress || formatCoordinates(pickup)
+    : "Click on the map to select pickup";
+
+  const destinationDisplay = destination
+    ? destinationAddress || formatCoordinates(destination)
+    : "Click again to select destination";
 
   return (
     <section className="ride-location-picker">
@@ -224,11 +376,7 @@ function RideLocationPicker({ onRouteChange, resetKey }) {
 
           <div>
             <strong>Pickup location</strong>
-            <small>
-              {pickup
-                ? `${pickup[0].toFixed(5)}, ${pickup[1].toFixed(5)}`
-                : "Click on the map to select pickup"}
-            </small>
+            <small>{pickupDisplay}</small>
           </div>
         </div>
 
@@ -237,14 +385,22 @@ function RideLocationPicker({ onRouteChange, resetKey }) {
 
           <div>
             <strong>Destination</strong>
-            <small>
-              {destination
-                ? `${destination[0].toFixed(5)}, ${destination[1].toFixed(5)}`
-                : "Click again to select destination"}
-            </small>
+            <small>{destinationDisplay}</small>
           </div>
         </div>
       </div>
+
+      {addressLoading && (
+        <p className="ride-map-message">
+          Finding readable addresses...
+        </p>
+      )}
+
+      {addressError && (
+        <p className="ride-map-message">
+          {addressError}
+        </p>
+      )}
 
       {loadingRoute && (
         <p className="ride-map-message">
@@ -264,8 +420,8 @@ function RideLocationPicker({ onRouteChange, resetKey }) {
       )}
 
       <p className="ride-map-disclaimer">
-        Map data © OpenStreetMap contributors. Route estimates
-        provided by OSRM and may vary from actual travel.
+        Map and address data © OpenStreetMap contributors.
+        Route estimates provided by OSRM and may vary from actual travel.
       </p>
     </section>
   );
