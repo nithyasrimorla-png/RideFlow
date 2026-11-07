@@ -33,7 +33,6 @@ public class RideController {
         this.fareService = fareService;
     }
 
-    // Book a new ride with automatic fare calculation
     @PostMapping("/book")
     public ResponseEntity<?> bookRide(
             @RequestBody Map<String, Object> request) {
@@ -143,7 +142,6 @@ public class RideController {
         return ResponseEntity.ok(history);
     }
 
-    // View driver ride history
     @GetMapping("/driver/{driverId}")
     public ResponseEntity<?> getDriverHistory(
             @PathVariable Long driverId) {
@@ -167,7 +165,7 @@ public class RideController {
         return ResponseEntity.ok(history);
     }
 
-    // View available rides for drivers
+  
     @GetMapping("/available/{driverId}")
     public ResponseEntity<?> getAvailableRides(
             @PathVariable Long driverId) {
@@ -182,6 +180,10 @@ public class RideController {
                     .body(Map.of("message", "Driver not found"));
         }
 
+        if (!driver.isAvailable()) {
+            return ResponseEntity.ok(List.of());
+        }
+
         List<Map<String, Object>> availableRides =
                 rideRepository.findByStatus(Ride.RideStatus.REQUESTED)
                         .stream()
@@ -191,7 +193,7 @@ public class RideController {
         return ResponseEntity.ok(availableRides);
     }
 
-    // Driver accepts a ride request
+   
     @PutMapping("/{rideId}/accept/{driverId}")
     public ResponseEntity<?> acceptRide(
             @PathVariable Long rideId,
@@ -207,6 +209,14 @@ public class RideController {
                     .body(Map.of("message", "Driver not found"));
         }
 
+        if (!driver.isAvailable()) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of(
+                            "message",
+                            "You are offline. Go online to accept rides."
+                    ));
+        }
+
         Ride ride = rideRepository.findById(rideId)
                 .orElse(null);
 
@@ -218,6 +228,7 @@ public class RideController {
         int updatedRows = rideRepository.assignDriverIfAvailable(
                 rideId,
                 driver,
+                driverId,
                 Ride.RideStatus.REQUESTED,
                 Ride.RideStatus.ACCEPTED
         );
@@ -226,7 +237,7 @@ public class RideController {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of(
                             "message",
-                            "Ride is no longer available for acceptance"
+                            "Ride is no longer available or your availability changed"
                     ));
         }
 
@@ -238,7 +249,6 @@ public class RideController {
         ));
     }
 
-    // Update ride status by assigned driver
     @PutMapping("/{rideId}/status/{driverId}")
     public ResponseEntity<?> updateRideStatus(
             @PathVariable Long rideId,
@@ -309,7 +319,7 @@ public class RideController {
         ));
     }
 
-    // Cancel a ride request
+
     @PutMapping("/{rideId}/cancel/{userId}")
     public ResponseEntity<?> cancelRide(
             @PathVariable Long rideId,
@@ -369,7 +379,6 @@ public class RideController {
         ));
     }
 
-    // Convert ride entity into API response
     private Map<String, Object> convertRideToResponse(Ride ride) {
 
         return Map.of(

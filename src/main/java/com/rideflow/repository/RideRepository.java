@@ -37,12 +37,18 @@ public interface RideRepository extends JpaRepository<Ride, Long> {
 
     @Modifying
     @Transactional
-    @Query("UPDATE Ride r SET r.driver = :driver, r.status = :acceptedStatus " +
-           "WHERE r.id = :rideId AND r.status = :requestedStatus " +
-           "AND r.driver IS NULL")
+    @Query("UPDATE Ride r SET r.driver = :driver, " +
+           "r.status = :acceptedStatus " +
+           "WHERE r.id = :rideId " +
+           "AND r.status = :requestedStatus " +
+           "AND r.driver IS NULL " +
+           "AND EXISTS (" +
+           "SELECT u.id FROM User u " +
+           "WHERE u.id = :driverId AND u.available = true)")
     int assignDriverIfAvailable(
             @Param("rideId") Long rideId,
             @Param("driver") User driver,
+            @Param("driverId") Long driverId,
             @Param("requestedStatus") Ride.RideStatus requestedStatus,
             @Param("acceptedStatus") Ride.RideStatus acceptedStatus
     );
