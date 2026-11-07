@@ -1,0 +1,592 @@
+
+import { useCallback, useEffect, useState } from "react";
+import axios from "axios";
+import {
+  CarFront,
+  MapPin,
+  Navigation,
+  Wallet,
+  Clock3,
+  RefreshCw,
+  LogOut,
+  CheckCircle2,
+  Route,
+  Play,
+  Flag,
+  AlertCircle,
+  LoaderCircle,
+  Power,
+} from "lucide-react";
+
+const RIDE_API = "http://localhost:8080/api/rides";
+const DRIVER_API = "http://localhost:8080/api/drivers";
+
+function getErrorMessage(error) {
+  return (
+    error.response?.data?.message ||
+    error.response?.data?.error ||
+    error.message ||
+    "Something went wrong. Please try again."
+  );
+}
+
+function extractRides(data) {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.rides)) return data.rides;
+  if (Array.isArray(data?.content)) return data.content;
+  if (Array.isArray(data?.data)) return data.data;
+  return [];
+}
+
+function formatCurrency(amount) {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(Number(amount) || 0);
+}
+
+function formatDate(dateValue) {
+  if (!dateValue) return "Just now";
+
+  const date = new Date(dateValue);
+
+  if (Number.isNaN(date.getTime())) return "Recently";
+
+  return date.toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function StatCard({ icon: Icon, label, value, detail }) {
+  return (
+    <div className="driver-stat-card">
+      <div className="driver-stat-icon">
+        <Icon size={21} />
+      </div>
+      <div>
+        <p className="driver-stat-label">{label}</p>
+        <h3>{value}</h3>
+        <span>{detail}</span>
+      </div>
+    </div>
+  );
+}
+
+function RideCard({
+  ride,
+  type,
+  loading,
+  onAccept,
+  onUpdateStatus,
+}) {
+  const rideId = ride.rideId ?? ride.id;
+  const pickup = ride.pickupLocation || "Pickup location unavailable";
+  const drop = ride.dropLocation || "Drop location unavailable";
+  const fare = ride.fare ?? ride.totalFare ?? 0;
+  const status = ride.status || "REQUESTED";
+  const riderName =
+    ride.riderName || ride.rider?.name || "RideFlow Rider";
+
+  return (
+    <article className="driver-ride-card">
+      <div className="driver-ride-top">
+        <div>
+          <span className={`driver-status status-${status.toLowerCase()}`}>
+            {status.replaceAll("_", " ")}
+          </span>
+          <p className="driver-ride-date">{formatDate(ride.createdAt)}</p>
+        </div>
+
+        <div className="driver-ride-fare">
+          <span>Estimated fare</span>
+          <strong>{formatCurrency(fare)}</strong>
+        </div>
+      </div>
+
+      <div className="driver-route">
+        <div className="driver-route-point">
+          <span className="driver-route-dot pickup-dot" />
+          <div>
+            <small>Pickup location</small>
+            <p>{pickup}</p>
+          </div>
+        </div>
+
+        <div className="driver-route-line" />
+
+        <div className="driver-route-point">
+          <span className="driver-route-dot drop-dot" />
+          <div>
+            <small>Drop location</small>
+            <p>{drop}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="driver-ride-bottom">
+        <div className="driver-rider-info">
+          <div className="driver-rider-avatar">
+            {riderName.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <small>Rider</small>
+            <strong>{riderName}</strong>
+          </div>
+        </div>
+
+        {type === "available" && (
+          <button
+            className="driver-action-btn"
+            onClick={() => onAccept(rideId)}
+            disabled={loading || !rideId}
+          >
+            <CheckCircle2 size={17} />
+            Accept Ride
+          </button>
+        )}
+
+        {type === "accepted" && (
+          <button
+            className="driver-action-btn"
+            onClick={() => onUpdateStatus(rideId, "ONGOING")}
+            disabled={loading || !rideId}
+          >
+            <Play size={17} />
+            Start Ride
+          </button>
+        )}
+
+        {type === "ongoing" && (
+          <button
+            className="driver-action-btn complete-btn"
+            onClick={() => onUpdateStatus(rideId, "COMPLETED")}
+            disabled={loading || !rideId}
+          >
+            <Flag size={17} />
+            Complete Ride
+          </button>
+        )}
+      </div>
+    </article>
+  );
+}
+
+export default function DriverDashboard({ user, onLogout }) {
+  const [availableRides, setAvailableRides] = useState([]);
+  const [myRides, setMyRides] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [availabilityLoading, setAvailabilityLoading] = useState(true);
+  const [isOnline, setIsOnline] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [activeTab, setActiveTab] = useState("available");
+
+  const driverId = user?.userId;
+
+  const fetchDashboardData = useCallback(async () => {
+    if (!driverId) {
+      setError("Driver account information is missing. Please log in again.");
+      setLoading(false);
+      setAvailabilityLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const [
+        availableResponse,
+        myRidesResponse,
+        availabilityResponse,
+      ] = await Promise.all([
+        axios.get(`${RIDE_API}/available/${driverId}`),
+        axios.get(`${RIDE_API}/driver/${driverId}`),
+        axios.get(`${DRIVER_API}/${driverId}/availability`),
+      ]);
+
+      setAvailableRides(extractRides(availableResponse.data));
+      setMyRides(extractRides(myRidesResponse.data));
+      setIsOnline(Boolean(availabilityResponse.data?.available));
+    } catch (requestError) {
+      setError(getErrorMessage(requestError));
+    } finally {
+      setLoading(false);
+      setAvailabilityLoading(false);
+    }
+  }, [driverId]);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
+
+  const handleAvailabilityToggle = async () => {
+    if (!driverId || availabilityLoading) return;
+
+    const nextAvailability = !isOnline;
+
+    setAvailabilityLoading(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const response = await axios.put(
+        `${DRIVER_API}/${driverId}/availability`,
+        { available: nextAvailability }
+      );
+
+      setIsOnline(Boolean(response.data?.available));
+
+      setSuccess(
+        nextAvailability
+          ? "You're online! You can now receive ride requests."
+          : "You're offline. You won't receive new ride requests."
+      );
+
+      if (nextAvailability) {
+        setActiveTab("available");
+      }
+    } catch (requestError) {
+      setError(getErrorMessage(requestError));
+    } finally {
+      setAvailabilityLoading(false);
+    }
+  };
+
+  const handleAcceptRide = async (rideId) => {
+    if (!rideId) return;
+
+    if (!isOnline) {
+      setError("Go online before accepting a ride.");
+      return;
+    }
+
+    setActionLoading(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      await axios.put(`${RIDE_API}/${rideId}/accept/${driverId}`);
+
+      setSuccess("Ride accepted successfully!");
+      setActiveTab("accepted");
+      await fetchDashboardData();
+    } catch (requestError) {
+      setError(getErrorMessage(requestError));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleUpdateStatus = async (rideId, status) => {
+    if (!rideId) return;
+
+    setActionLoading(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      await axios.put(`${RIDE_API}/${rideId}/status/${driverId}`, {
+        status,
+      });
+
+      setSuccess(
+        status === "ONGOING"
+          ? "Ride started successfully!"
+          : "Ride completed successfully!"
+      );
+
+      await fetchDashboardData();
+    } catch (requestError) {
+      setError(getErrorMessage(requestError));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const acceptedRides = myRides.filter(
+    (ride) => ride.status === "ACCEPTED"
+  );
+
+  const ongoingRides = myRides.filter(
+    (ride) => ride.status === "ONGOING"
+  );
+
+  const completedRides = myRides.filter(
+    (ride) => ride.status === "COMPLETED"
+  );
+
+  const totalEarnings = completedRides.reduce(
+    (total, ride) => total + (Number(ride.fare) || 0),
+    0
+  );
+
+  const displayedRides =
+    activeTab === "available"
+      ? isOnline
+        ? availableRides
+        : []
+      : activeTab === "accepted"
+        ? acceptedRides
+        : activeTab === "ongoing"
+          ? ongoingRides
+          : completedRides;
+
+  const tabTitle = {
+    available: "Available ride requests",
+    accepted: "Accepted rides",
+    ongoing: "Ongoing rides",
+    completed: "Completed rides",
+  };
+
+  return (
+    <div className="driver-dashboard">
+      <header className="driver-header">
+        <a href="/" className="driver-brand">
+          <span className="driver-brand-icon">
+            <CarFront size={23} />
+          </span>
+          <span>Ride<span>Flow</span></span>
+        </a>
+
+        <div className="driver-header-right">
+          <div className="driver-profile">
+            <div className="driver-profile-avatar">
+              {(user?.name || "D").charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <strong>{user?.name || "Driver"}</strong>
+              <small>Driver account</small>
+            </div>
+          </div>
+
+          <button
+            className="driver-logout-btn"
+            onClick={onLogout}
+            title="Logout"
+          >
+            <LogOut size={17} />
+            <span>Logout</span>
+          </button>
+        </div>
+      </header>
+
+      <main className="driver-main">
+        <section className="driver-welcome">
+          <div>
+            <span className="driver-eyebrow">DRIVER WORKSPACE</span>
+            <h1>Welcome back, {user?.name?.split(" ")[0] || "Driver"}!</h1>
+            <p>Manage your rides and track your driving activity.</p>
+
+            <div className={`driver-availability ${isOnline ? "is-online" : "is-offline"}`}>
+              <span className="driver-availability-dot" />
+              <span>{isOnline ? "You're Online" : "You're Offline"}</span>
+            </div>
+          </div>
+
+          <div className="driver-welcome-actions">
+            <button
+              className={`driver-availability-btn ${isOnline ? "online" : "offline"}`}
+              onClick={handleAvailabilityToggle}
+              disabled={availabilityLoading || loading}
+            >
+              {availabilityLoading ? (
+                <LoaderCircle size={17} className="driver-spin" />
+              ) : (
+                <Power size={17} />
+              )}
+              {availabilityLoading
+                ? "Updating..."
+                : isOnline
+                  ? "Go Offline"
+                  : "Go Online"}
+            </button>
+
+            <button
+              className="driver-refresh-btn"
+              onClick={fetchDashboardData}
+              disabled={loading || actionLoading || availabilityLoading}
+            >
+              <RefreshCw
+                size={17}
+                className={loading ? "driver-spin" : ""}
+              />
+              Refresh
+            </button>
+          </div>
+        </section>
+
+        {error && (
+          <div className="driver-alert driver-alert-error">
+            <AlertCircle size={18} />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {success && (
+          <div className="driver-alert driver-alert-success">
+            <CheckCircle2 size={18} />
+            <span>{success}</span>
+            <button onClick={() => setSuccess("")}>×</button>
+          </div>
+        )}
+
+        <section className="driver-stats-grid">
+          <StatCard
+            icon={Route}
+            label="Total rides"
+            value={myRides.length}
+            detail="Your assigned rides"
+          />
+          <StatCard
+            icon={CheckCircle2}
+            label="Completed rides"
+            value={completedRides.length}
+            detail="Successfully completed"
+          />
+          <StatCard
+            icon={Clock3}
+            label="Active rides"
+            value={acceptedRides.length + ongoingRides.length}
+            detail="Accepted and ongoing"
+          />
+          <StatCard
+            icon={Wallet}
+            label="Total earnings"
+            value={formatCurrency(totalEarnings)}
+            detail="From completed rides"
+          />
+        </section>
+
+        <section className="driver-workspace">
+          <div className="driver-section-heading">
+            <div>
+              <span className="driver-eyebrow">RIDE MANAGEMENT</span>
+              <h2>Your rides</h2>
+            </div>
+            <span className="driver-live-label">
+              <span />
+              Live data from server
+            </span>
+          </div>
+
+          <div className="driver-tabs">
+            <button
+              className={activeTab === "available" ? "active" : ""}
+              onClick={() => setActiveTab("available")}
+            >
+              Available
+              <span>{isOnline ? availableRides.length : 0}</span>
+            </button>
+
+            <button
+              className={activeTab === "accepted" ? "active" : ""}
+              onClick={() => setActiveTab("accepted")}
+            >
+              Accepted
+              <span>{acceptedRides.length}</span>
+            </button>
+
+            <button
+              className={activeTab === "ongoing" ? "active" : ""}
+              onClick={() => setActiveTab("ongoing")}
+            >
+              Ongoing
+              <span>{ongoingRides.length}</span>
+            </button>
+
+            <button
+              className={activeTab === "completed" ? "active" : ""}
+              onClick={() => setActiveTab("completed")}
+            >
+              Completed
+              <span>{completedRides.length}</span>
+            </button>
+          </div>
+
+          <div className="driver-rides-heading">
+            <h3>{tabTitle[activeTab]}</h3>
+            <span>
+              {displayedRides.length}{" "}
+              {displayedRides.length === 1 ? "ride" : "rides"}
+            </span>
+          </div>
+
+          {loading ? (
+            <div className="driver-empty-state">
+              <LoaderCircle className="driver-spin" size={32} />
+              <h3>Loading your rides...</h3>
+              <p>Please wait while we fetch the latest information.</p>
+            </div>
+          ) : activeTab === "available" && !isOnline ? (
+            <div className="driver-empty-state">
+              <div className="driver-empty-icon">
+                <Power size={27} />
+              </div>
+              <h3>You're currently offline</h3>
+              <p>Go online to view and accept new ride requests.</p>
+              <button
+                className="driver-empty-refresh"
+                onClick={handleAvailabilityToggle}
+                disabled={availabilityLoading}
+              >
+                <Power size={16} />
+                Go Online
+              </button>
+            </div>
+          ) : displayedRides.length === 0 ? (
+            <div className="driver-empty-state">
+              <div className="driver-empty-icon">
+                {activeTab === "available" ? (
+                  <Navigation size={27} />
+                ) : (
+                  <MapPin size={27} />
+                )}
+              </div>
+              <h3>
+                {activeTab === "available"
+                  ? "No ride requests available"
+                  : `No ${activeTab} rides yet`}
+              </h3>
+              <p>
+                {activeTab === "available"
+                  ? "New ride requests will appear here when available."
+                  : "Your rides will appear here as you accept and complete them."}
+              </p>
+              <button
+                className="driver-empty-refresh"
+                onClick={fetchDashboardData}
+              >
+                <RefreshCw size={16} />
+                Check again
+              </button>
+            </div>
+          ) : (
+            <div className="driver-rides-list">
+              {displayedRides.map((ride) => (
+                <RideCard
+                  key={ride.rideId ?? ride.id}
+                  ride={ride}
+                  type={activeTab}
+                  loading={actionLoading}
+                  onAccept={handleAcceptRide}
+                  onUpdateStatus={handleUpdateStatus}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <footer className="driver-footer">
+          <span>© {new Date().getFullYear()} RideFlow</span>
+          <span>Drive safely. Ride smoothly.</span>
+        </footer>
+      </main>
+    </div>
+  );
+}

@@ -1,10 +1,10 @@
+
 import { useState } from "react";
 import axios from "axios";
 import {
   ArrowRight,
   CarFront,
   Lock,
-  LogOut,
   Mail,
   Menu,
   ShieldCheck,
@@ -13,7 +13,9 @@ import {
   X,
   Zap,
 } from "lucide-react";
+
 import RiderDashboard from "./RiderDashboard";
+import DriverDashboard from "./DriverDashboard";
 import "./App.css";
 
 const USER_API = "http://localhost:8080/api/users";
@@ -22,8 +24,11 @@ const STORAGE_KEY = "rideflowUser";
 function loadStoredUser() {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
+
     if (!stored) return null;
+
     const parsed = JSON.parse(stored);
+
     return parsed && parsed.userId ? parsed : null;
   } catch {
     return null;
@@ -32,13 +37,25 @@ function loadStoredUser() {
 
 function getErrorMessage(err, fallback) {
   const data = err.response?.data;
-  if (typeof data === "string" && data.trim()) return data;
-  if (data?.message) return data.message;
+
+  if (typeof data === "string" && data.trim()) {
+    return data;
+  }
+
+  if (data?.message) {
+    return data.message;
+  }
+
   if (!err.response) {
     return "Unable to reach the server. Please check that the backend is running.";
   }
+
   return fallback;
 }
+
+/* =========================================
+   CAR ILLUSTRATION
+========================================= */
 
 function CarIllustration() {
   return (
@@ -49,35 +66,69 @@ function CarIllustration() {
       aria-label="RideFlow car illustration"
     >
       <ellipse className="car-shadow" cx="260" cy="262" rx="215" ry="16" />
+
       <path
         className="car-body"
         d="M60 200 C60 176 76 166 98 162 L142 110 C154 94 170 86 190 86 L326 86 C348 86 364 94 378 110 L416 160 C450 164 466 178 466 202 L466 224 C466 232 460 238 452 238 L74 238 C66 238 60 232 60 224 Z"
       />
+
       <path
         className="car-window"
         d="M160 156 L192 112 C196 106 202 104 208 104 L250 104 L250 156 Z"
       />
+
       <path
         className="car-window"
         d="M268 104 L322 104 C330 104 336 107 341 113 L372 156 L268 156 Z"
       />
-      <rect className="car-stripe" x="70" y="186" width="386" height="8" rx="4" />
-      <rect className="car-light" x="440" y="176" width="26" height="14" rx="6" />
-      <rect className="car-taillight" x="60" y="178" width="18" height="14" rx="6" />
+
+      <rect
+        className="car-stripe"
+        x="70"
+        y="186"
+        width="386"
+        height="8"
+        rx="4"
+      />
+
+      <rect
+        className="car-light"
+        x="440"
+        y="176"
+        width="26"
+        height="14"
+        rx="6"
+      />
+
+      <rect
+        className="car-taillight"
+        x="60"
+        y="178"
+        width="18"
+        height="14"
+        rx="6"
+      />
+
       <g>
         <circle className="car-wheel" cx="148" cy="238" r="38" />
         <circle className="car-hub" cx="148" cy="238" r="16" />
         <circle className="car-wheel" cx="384" cy="238" r="38" />
         <circle className="car-hub" cx="384" cy="238" r="16" />
       </g>
+
       <g className="car-pin">
         <circle cx="420" cy="52" r="26" />
         <circle className="car-pin-dot" cx="420" cy="52" r="9" />
       </g>
+
       <path className="car-route" d="M60 270 C140 290 300 292 380 276" />
     </svg>
   );
 }
+
+/* =========================================
+   NAVBAR
+========================================= */
 
 function Navbar({ onNavigate, onLogin, onRegister }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -99,6 +150,7 @@ function Navbar({ onNavigate, onLogin, onRegister }) {
           <span className="rf-brand-icon">
             <CarFront size={22} />
           </span>
+
           <span className="rf-brand-text">
             ride<span>flow</span>
           </span>
@@ -108,12 +160,15 @@ function Navbar({ onNavigate, onLogin, onRegister }) {
           <button type="button" onClick={() => go("home")}>
             Home
           </button>
+
           <button type="button" onClick={() => go("features")}>
             Features
           </button>
+
           <button type="button" onClick={() => go("about")}>
             About
           </button>
+
           <div className="rf-nav-actions">
             <button
               type="button"
@@ -125,6 +180,7 @@ function Navbar({ onNavigate, onLogin, onRegister }) {
             >
               Log in
             </button>
+
             <button
               type="button"
               className="rf-btn rf-btn-gold"
@@ -151,7 +207,17 @@ function Navbar({ onNavigate, onLogin, onRegister }) {
   );
 }
 
-function Landing({ onNavigate, onLogin, onRegister, onBookRide, onBecomeDriver }) {
+/* =========================================
+   LANDING PAGE
+========================================= */
+
+function Landing({
+  onNavigate,
+  onLogin,
+  onRegister,
+  onBookRide,
+  onBecomeDriver,
+}) {
   return (
     <div className="rf-page">
       <Navbar
@@ -165,14 +231,17 @@ function Landing({ onNavigate, onLogin, onRegister, onBookRide, onBecomeDriver }
           <div className="rf-container rf-hero-grid">
             <div className="rf-hero-copy">
               <span className="rf-eyebrow">YOUR CITY, YOUR RIDE</span>
+
               <h1>
                 Every journey begins with <em>RideFlow.</em>
               </h1>
+
               <p>
                 Book convenient rides in minutes, see transparent fares before
                 you travel, and get where you are going with a reliable driver
                 you can count on.
               </p>
+
               <div className="rf-hero-buttons">
                 <button
                   type="button"
@@ -182,6 +251,7 @@ function Landing({ onNavigate, onLogin, onRegister, onBookRide, onBecomeDriver }
                   Book your ride
                   <ArrowRight size={18} />
                 </button>
+
                 <button
                   type="button"
                   className="rf-btn rf-btn-outline rf-btn-lg"
@@ -204,7 +274,9 @@ function Landing({ onNavigate, onLogin, onRegister, onBookRide, onBecomeDriver }
           <div className="rf-container">
             <div className="rf-section-heading">
               <span className="rf-eyebrow">WHY RIDEFLOW</span>
+
               <h2>Rides built around you.</h2>
+
               <p>
                 Everything you need for a smooth trip, from the moment you book
                 to the moment you arrive.
@@ -216,7 +288,9 @@ function Landing({ onNavigate, onLogin, onRegister, onBookRide, onBecomeDriver }
                 <div className="rf-feature-icon">
                   <Zap size={24} />
                 </div>
+
                 <h3>Quick pickups</h3>
+
                 <p>
                   Request a ride in a few taps and get matched with a nearby
                   driver so you spend less time waiting.
@@ -227,7 +301,9 @@ function Landing({ onNavigate, onLogin, onRegister, onBookRide, onBecomeDriver }
                 <div className="rf-feature-icon">
                   <ShieldCheck size={24} />
                 </div>
+
                 <h3>Ride with confidence</h3>
+
                 <p>
                   Every trip is tracked from request to completion, so you
                   always know the status of your ride.
@@ -238,7 +314,9 @@ function Landing({ onNavigate, onLogin, onRegister, onBookRide, onBecomeDriver }
                 <div className="rf-feature-icon">
                   <Wallet size={24} />
                 </div>
+
                 <h3>Transparent fares</h3>
+
                 <p>
                   See your estimated fare with a clear breakdown before you
                   confirm. No surprises at the end of the trip.
@@ -255,12 +333,15 @@ function Landing({ onNavigate, onLogin, onRegister, onBookRide, onBecomeDriver }
                 <span className="rf-eyebrow rf-eyebrow-light">
                   FOR DRIVERS
                 </span>
+
                 <h2>Drive when you want. Earn on your terms.</h2>
+
                 <p>
                   Join the RideFlow driver community, accept rides near you and
                   turn your time on the road into steady income.
                 </p>
               </div>
+
               <button
                 type="button"
                 className="rf-btn rf-btn-gold rf-btn-lg"
@@ -277,12 +358,15 @@ function Landing({ onNavigate, onLogin, onRegister, onBookRide, onBecomeDriver }
           <div className="rf-container rf-about">
             <div className="rf-about-copy">
               <span className="rf-eyebrow">ABOUT RIDEFLOW</span>
+
               <h2>Simple, honest and reliable rides.</h2>
+
               <p>
                 RideFlow connects riders and drivers through a clean, easy to
                 use platform. We believe getting around your city should feel
                 effortless, with clear pricing and dependable service.
               </p>
+
               <p>
                 Whether you are heading to work, meeting friends or catching a
                 flight, RideFlow keeps every journey straightforward from start
@@ -295,14 +379,17 @@ function Landing({ onNavigate, onLogin, onRegister, onBookRide, onBecomeDriver }
                 <strong>Fast</strong>
                 <span>Book a ride in minutes</span>
               </div>
+
               <div className="rf-about-stat">
                 <strong>Clear</strong>
                 <span>Fare estimates up front</span>
               </div>
+
               <div className="rf-about-stat">
                 <strong>Trusted</strong>
                 <span>Every ride tracked</span>
               </div>
+
               <div className="rf-about-stat">
                 <strong>Open</strong>
                 <span>For riders and drivers</span>
@@ -318,29 +405,46 @@ function Landing({ onNavigate, onLogin, onRegister, onBookRide, onBecomeDriver }
             <span className="rf-brand-icon">
               <CarFront size={20} />
             </span>
+
             <span className="rf-brand-text">
               ride<span>flow</span>
             </span>
           </div>
+
           <div className="rf-footer-links">
             <button type="button" onClick={() => onNavigate("home")}>
               Home
             </button>
+
             <button type="button" onClick={() => onNavigate("features")}>
               Features
             </button>
+
             <button type="button" onClick={() => onNavigate("about")}>
               About
             </button>
           </div>
-          <p>&copy; {new Date().getFullYear()} RideFlow. All rights reserved.</p>
+
+          <p>
+            &copy; {new Date().getFullYear()} RideFlow. All rights reserved.
+          </p>
         </div>
       </footer>
     </div>
   );
 }
 
-function AuthScreen({ mode, initialRole, onModeChange, onBack, onAuthenticated }) {
+/* =========================================
+   LOGIN AND REGISTRATION
+========================================= */
+
+function AuthScreen({
+  mode,
+  initialRole,
+  onModeChange,
+  onBack,
+  onAuthenticated,
+}) {
   const isRegister = mode === "register";
 
   const [name, setName] = useState("");
@@ -425,10 +529,15 @@ function AuthScreen({ mode, initialRole, onModeChange, onBack, onAuthenticated }
   return (
     <div className="auth-page">
       <aside className="auth-side">
-        <button type="button" className="rf-brand rf-brand-light" onClick={onBack}>
+        <button
+          type="button"
+          className="rf-brand rf-brand-light"
+          onClick={onBack}
+        >
           <span className="rf-brand-icon">
             <CarFront size={22} />
           </span>
+
           <span className="rf-brand-text">
             ride<span>flow</span>
           </span>
@@ -438,11 +547,13 @@ function AuthScreen({ mode, initialRole, onModeChange, onBack, onAuthenticated }
           <span className="rf-eyebrow rf-eyebrow-light">
             {isRegister ? "JOIN RIDEFLOW" : "WELCOME BACK"}
           </span>
+
           <h2>
             {isRegister
               ? "Your next journey starts here."
               : "Good to see you again."}
           </h2>
+
           <p>
             Convenient rides, transparent fares and reliable journeys, all in
             one place.
@@ -458,7 +569,10 @@ function AuthScreen({ mode, initialRole, onModeChange, onBack, onAuthenticated }
             &larr; Back to home
           </button>
 
-          <h1>{isRegister ? "Create your account" : "Log in to RideFlow"}</h1>
+          <h1>
+            {isRegister ? "Create your account" : "Log in to RideFlow"}
+          </h1>
+
           <p className="auth-subtitle">
             {isRegister
               ? "Choose how you want to use RideFlow."
@@ -466,7 +580,11 @@ function AuthScreen({ mode, initialRole, onModeChange, onBack, onAuthenticated }
           </p>
 
           {isRegister && (
-            <div className="role-selector" role="radiogroup" aria-label="Account type">
+            <div
+              className="role-selector"
+              role="radiogroup"
+              aria-label="Account type"
+            >
               <button
                 type="button"
                 role="radio"
@@ -477,6 +595,7 @@ function AuthScreen({ mode, initialRole, onModeChange, onBack, onAuthenticated }
                 <strong>Rider</strong>
                 <span>Book rides</span>
               </button>
+
               <button
                 type="button"
                 role="radio"
@@ -496,8 +615,10 @@ function AuthScreen({ mode, initialRole, onModeChange, onBack, onAuthenticated }
             {isRegister && (
               <>
                 <label htmlFor="authName">Full name</label>
+
                 <div className="auth-input">
                   <User size={18} />
+
                   <input
                     id="authName"
                     type="text"
@@ -511,8 +632,10 @@ function AuthScreen({ mode, initialRole, onModeChange, onBack, onAuthenticated }
             )}
 
             <label htmlFor="authEmail">Email</label>
+
             <div className="auth-input">
               <Mail size={18} />
+
               <input
                 id="authEmail"
                 type="email"
@@ -524,15 +647,21 @@ function AuthScreen({ mode, initialRole, onModeChange, onBack, onAuthenticated }
             </div>
 
             <label htmlFor="authPassword">Password</label>
+
             <div className="auth-input">
               <Lock size={18} />
+
               <input
                 id="authPassword"
                 type="password"
-                placeholder={isRegister ? "At least 6 characters" : "Your password"}
+                placeholder={
+                  isRegister ? "At least 6 characters" : "Your password"
+                }
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                autoComplete={isRegister ? "new-password" : "current-password"}
+                autoComplete={
+                  isRegister ? "new-password" : "current-password"
+                }
               />
             </div>
 
@@ -546,14 +675,18 @@ function AuthScreen({ mode, initialRole, onModeChange, onBack, onAuthenticated }
                   ? "Creating account..."
                   : "Logging in..."
                 : isRegister
-                ? "Create account"
-                : "Log in"}
+                  ? "Create account"
+                  : "Log in"}
+
               {!submitting && <ArrowRight size={18} />}
             </button>
           </form>
 
           <p className="auth-switch">
-            {isRegister ? "Already have an account?" : "New to RideFlow?"}{" "}
+            {isRegister
+              ? "Already have an account?"
+              : "New to RideFlow?"}{" "}
+
             <button
               type="button"
               onClick={() => switchMode(isRegister ? "login" : "register")}
@@ -567,61 +700,9 @@ function AuthScreen({ mode, initialRole, onModeChange, onBack, onAuthenticated }
   );
 }
 
-function DriverHome({ user, onLogout }) {
-  return (
-    <div className="driver-page">
-      <header className="rider-topbar">
-        <a href="/" className="rider-brand">
-          <span className="rider-brand-icon">
-            <CarFront size={24} />
-          </span>
-          <span>
-            ride<span>flow</span>
-          </span>
-        </a>
-
-        <div className="rider-topbar-right">
-          <div className="rider-profile">
-            <div className="rider-avatar">
-              {user.name?.charAt(0)?.toUpperCase() || "D"}
-            </div>
-            <div>
-              <strong>{user.name}</strong>
-              <small>Driver account</small>
-            </div>
-          </div>
-
-          <button className="rider-logout" onClick={onLogout}>
-            <LogOut size={17} />
-            <span>Logout</span>
-          </button>
-        </div>
-      </header>
-
-      <main className="rider-main">
-        <section className="rider-welcome">
-          <div>
-            <span className="rider-eyebrow">DRIVER DASHBOARD</span>
-            <h1>Hello, {user.name?.split(" ")[0] || "there"}!</h1>
-            <p>You are logged in as a RideFlow driver.</p>
-          </div>
-          <div className="rider-welcome-icon">
-            <CarFront size={38} />
-          </div>
-        </section>
-
-        <section className="booking-card driver-card">
-          <span className="rider-eyebrow">COMING SOON</span>
-          <h2>Your driver tools are on the way.</h2>
-          <p>
-            The driver dashboard for viewing and accepting ride requests will
-            appear here. Your account is ready.
-          </p>
-        </section>
-      </main>
-    </div>
-  );
-}
+/* =========================================
+   MAIN APP
+========================================= */
 
 function App() {
   const [user, setUser] = useState(loadStoredUser);
@@ -631,12 +712,17 @@ function App() {
 
   const scrollToSection = (id) => {
     setView("landing");
+
     window.setTimeout(() => {
       const target = document.getElementById(id);
+
       if (id === "home" || !target) {
         window.scrollTo({ top: 0, behavior: "smooth" });
       } else {
-        target.scrollIntoView({ behavior: "smooth", block: "start" });
+        target.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
       }
     }, 0);
   };
@@ -676,12 +762,23 @@ function App() {
     window.scrollTo({ top: 0 });
   };
 
+  // Render the correct dashboard based on the authenticated user's role.
   if (user) {
     if (user.role === "DRIVER") {
-      return <DriverHome user={user} onLogout={handleLogout} />;
+      return (
+        <DriverDashboard
+          user={user}
+          onLogout={handleLogout}
+        />
+      );
     }
 
-    return <RiderDashboard user={user} onLogout={handleLogout} />;
+    return (
+      <RiderDashboard
+        user={user}
+        onLogout={handleLogout}
+      />
+    );
   }
 
   if (view === "auth") {
