@@ -1,7 +1,9 @@
+
 package com.rideflow.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -22,7 +24,7 @@ public class ReverseGeocodingService {
 
     private static final long MIN_REQUEST_INTERVAL_MS = 1000;
 
-    private final ObjectMapper objectMapper;
+    private final JsonMapper objectMapper;
 
     private final HttpClient httpClient;
 
@@ -33,7 +35,7 @@ public class ReverseGeocodingService {
 
     private long lastRequestTime = 0;
 
-    public ReverseGeocodingService(ObjectMapper objectMapper) {
+    public ReverseGeocodingService(JsonMapper objectMapper) {
         this.objectMapper = objectMapper;
 
         this.httpClient = HttpClient.newBuilder()
@@ -44,15 +46,18 @@ public class ReverseGeocodingService {
     public String getAddress(double latitude, double longitude)
             throws IOException, InterruptedException {
 
+        // Validate coordinates
         if (!Double.isFinite(latitude)
                 || !Double.isFinite(longitude)
                 || latitude < -90 || latitude > 90
                 || longitude < -180 || longitude > 180) {
+
             throw new IllegalArgumentException(
                     "Invalid latitude or longitude."
             );
         }
 
+        // Generate cache key
         String cacheKey = String.format(
                 Locale.ROOT,
                 "%.5f,%.5f",
@@ -60,14 +65,17 @@ public class ReverseGeocodingService {
                 longitude
         );
 
+        // Check cached address
         String cachedAddress = addressCache.get(cacheKey);
 
         if (cachedAddress != null) {
             return cachedAddress;
         }
 
+        // Respect Nominatim request rate limit
         waitForRateLimit();
 
+        // Build reverse geocoding URL
         String url = NOMINATIM_URL
                 + "?format=jsonv2"
                 + "&lat=" + latitude
@@ -87,6 +95,7 @@ public class ReverseGeocodingService {
                 .GET()
                 .build();
 
+        // Send HTTP request
         HttpResponse<String> response = httpClient.send(
                 request,
                 HttpResponse.BodyHandlers.ofString()
@@ -99,9 +108,10 @@ public class ReverseGeocodingService {
             );
         }
 
+        // Parse JSON response using Jackson 3
         JsonNode json = objectMapper.readTree(response.body());
 
-        String address = json.path("display_name").asText("");
+        String address = json.path("display_name").asString("");
 
         if (address.isBlank()) {
             throw new IOException(
@@ -109,6 +119,7 @@ public class ReverseGeocodingService {
             );
         }
 
+        // Store address in cache
         addressCache.put(cacheKey, address);
 
         return address;
@@ -118,9 +129,11 @@ public class ReverseGeocodingService {
 
         synchronized (rateLimitLock) {
 
-            long elapsed = System.currentTimeMillis() - lastRequestTime;
+            long elapsed =
+                    System.currentTimeMillis() - lastRequestTime;
 
-            long waitTime = MIN_REQUEST_INTERVAL_MS - elapsed;
+            long waitTime =
+                    MIN_REQUEST_INTERVAL_MS - elapsed;
 
             if (waitTime > 0) {
                 Thread.sleep(waitTime);
