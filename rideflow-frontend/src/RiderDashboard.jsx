@@ -1,3 +1,4 @@
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import {
@@ -126,6 +127,8 @@ function RiderDashboard({ user, onLogout }) {
   const [dropLocation, setDropLocation] = useState("");
   const [distanceKm, setDistanceKm] = useState("");
 
+  const [mapResetKey, setMapResetKey] = useState(0);
+
   const [fare, setFare] = useState(null);
   const [loadingFare, setLoadingFare] = useState(false);
   const [booking, setBooking] = useState(false);
@@ -137,8 +140,7 @@ function RiderDashboard({ user, onLogout }) {
 
   const isFetchingRef = useRef(false);
 
-  // Keep this callback stable so the map does not repeatedly
-  // request the same route because of parent re-renders.
+  // Stable callback for map selections.
   const handleRouteChange = useCallback((route) => {
     setFare(null);
     setError("");
@@ -156,10 +158,13 @@ function RiderDashboard({ user, onLogout }) {
     setDistanceKm(String(route.distanceKm));
   }, []);
 
+  // Fetch rider's ride history.
   const fetchRides = useCallback(
     async ({ silent = false } = {}) => {
       if (!user?.userId) {
-        setError("Rider account information is missing. Please log in again.");
+        setError(
+          "Rider account information is missing. Please log in again."
+        );
         setLoadingRides(false);
         return;
       }
@@ -202,6 +207,7 @@ function RiderDashboard({ user, onLogout }) {
     [user?.userId]
   );
 
+  // Initial load and automatic refresh.
   useEffect(() => {
     fetchRides();
 
@@ -214,6 +220,7 @@ function RiderDashboard({ user, onLogout }) {
     };
   }, [fetchRides]);
 
+  // Calculate fare using the map's driving distance.
   const handleFareEstimate = async (event) => {
     event.preventDefault();
 
@@ -224,26 +231,33 @@ function RiderDashboard({ user, onLogout }) {
     const distance = Number(distanceKm);
 
     if (!pickupLocation || !dropLocation) {
-      setError("Please select both pickup and destination on the map.");
+      setError(
+        "Please select both pickup and destination on the map."
+      );
       return;
     }
 
     if (!Number.isFinite(distance) || distance <= 0) {
-      setError("Please select two valid locations to calculate the route.");
+      setError(
+        "Please select two valid locations to calculate the route."
+      );
       return;
     }
 
     if (pickupLocation === dropLocation) {
-      setError("Pickup and destination cannot be the same.");
+      setError(
+        "Pickup and destination cannot be the same."
+      );
       return;
     }
 
     setLoadingFare(true);
 
     try {
-      const response = await axios.post(`${FARE_API}/calculate`, {
-        distanceKm: distance,
-      });
+      const response = await axios.post(
+        `${FARE_API}/calculate`,
+        { distanceKm: distance }
+      );
 
       setFare(response.data);
     } catch (err) {
@@ -258,6 +272,7 @@ function RiderDashboard({ user, onLogout }) {
     }
   };
 
+  // Book a ride using selected map coordinates.
   const handleBookRide = async () => {
     if (!fare) {
       setError("Please calculate the fare before booking.");
@@ -265,7 +280,9 @@ function RiderDashboard({ user, onLogout }) {
     }
 
     if (!pickupLocation || !dropLocation || !distanceKm) {
-      setError("Please select your pickup and destination on the map.");
+      setError(
+        "Please select your pickup and destination on the map."
+      );
       return;
     }
 
@@ -274,22 +291,29 @@ function RiderDashboard({ user, onLogout }) {
     setSuccess("");
 
     try {
-      const response = await axios.post(`${RIDE_API}/book`, {
-        riderId: user.userId,
-        pickupLocation,
-        dropLocation,
-        distanceKm: Number(distanceKm),
-      });
+      const response = await axios.post(
+        `${RIDE_API}/book`,
+        {
+          riderId: user.userId,
+          pickupLocation,
+          dropLocation,
+          distanceKm: Number(distanceKm),
+        }
+      );
 
       setSuccess(
         response.data.message ||
           "Your ride has been booked successfully!"
       );
 
+      // Clear the selected journey in the dashboard.
       setPickupLocation("");
       setDropLocation("");
       setDistanceKm("");
       setFare(null);
+
+      // Reset the map markers and route.
+      setMapResetKey((previous) => previous + 1);
 
       await fetchRides();
     } catch (err) {
@@ -304,9 +328,11 @@ function RiderDashboard({ user, onLogout }) {
     }
   };
 
-  // Cancel a ride that has not started yet.
+  // Cancel REQUESTED or ACCEPTED rides.
   const handleCancelRide = async (ride) => {
-    const canCancel = ["REQUESTED", "ACCEPTED"].includes(ride.status);
+    const canCancel = ["REQUESTED", "ACCEPTED"].includes(
+      ride.status
+    );
 
     if (!canCancel) {
       setError("This ride can no longer be cancelled.");
@@ -377,6 +403,7 @@ function RiderDashboard({ user, onLogout }) {
           <span className="rider-brand-icon">
             <CarFront size={24} />
           </span>
+
           <span>
             ride<span>flow</span>
           </span>
@@ -405,9 +432,11 @@ function RiderDashboard({ user, onLogout }) {
         <section className="rider-welcome">
           <div>
             <span className="rider-eyebrow">RIDER DASHBOARD</span>
+
             <h1>
               Hello, {user?.name?.split(" ")[0] || "there"}!
             </h1>
+
             <p>Where would you like to go today?</p>
           </div>
 
@@ -421,6 +450,7 @@ function RiderDashboard({ user, onLogout }) {
             <div className="rider-stat-icon">
               <Route size={21} />
             </div>
+
             <div>
               <span>Total rides</span>
               <strong>{rides.length}</strong>
@@ -431,6 +461,7 @@ function RiderDashboard({ user, onLogout }) {
             <div className="rider-stat-icon">
               <Clock3 size={21} />
             </div>
+
             <div>
               <span>Active rides</span>
               <strong>{activeRides}</strong>
@@ -441,6 +472,7 @@ function RiderDashboard({ user, onLogout }) {
             <div className="rider-stat-icon">
               <CheckCircle2 size={21} />
             </div>
+
             <div>
               <span>Completed rides</span>
               <strong>{completedRides}</strong>
@@ -451,6 +483,7 @@ function RiderDashboard({ user, onLogout }) {
             <div className="rider-stat-icon">
               <CalendarDays size={21} />
             </div>
+
             <div>
               <span>Awaiting driver</span>
               <strong>{requestedRides}</strong>
@@ -463,7 +496,9 @@ function RiderDashboard({ user, onLogout }) {
             <div className="rider-card-heading">
               <div>
                 <span className="rider-eyebrow">BOOK A RIDE</span>
+
                 <h2>Plan your journey.</h2>
+
                 <p>
                   Select your pickup and destination on the map.
                 </p>
@@ -486,11 +521,15 @@ function RiderDashboard({ user, onLogout }) {
               </div>
             )}
 
-            <RideLocationPicker onRouteChange={handleRouteChange} />
+            <RideLocationPicker
+              onRouteChange={handleRouteChange}
+              resetKey={mapResetKey}
+            />
 
             <div className="rider-selected-route">
               <div className="rider-selected-location">
                 <MapPin size={17} />
+
                 <div>
                   <strong>Selected pickup</strong>
                   <span>
@@ -501,6 +540,7 @@ function RiderDashboard({ user, onLogout }) {
 
               <div className="rider-selected-location">
                 <Navigation size={17} />
+
                 <div>
                   <strong>Selected destination</strong>
                   <span>
@@ -511,10 +551,13 @@ function RiderDashboard({ user, onLogout }) {
 
               <div className="rider-selected-location">
                 <Route size={17} />
+
                 <div>
                   <strong>Driving distance</strong>
                   <span>
-                    {distanceKm ? `${distanceKm} km` : "Waiting for route"}
+                    {distanceKm
+                      ? `${distanceKm} km`
+                      : "Waiting for route"}
                   </span>
                 </div>
               </div>
@@ -543,6 +586,7 @@ function RiderDashboard({ user, onLogout }) {
                 <div className="fare-result-heading">
                   <div>
                     <span>ESTIMATED FARE</span>
+
                     <strong>
                       {formatCurrency(fare.totalFare)}
                     </strong>
@@ -588,9 +632,9 @@ function RiderDashboard({ user, onLogout }) {
             )}
 
             <p className="fare-disclaimer">
-              Fare is an estimate based on the driving distance calculated
-              from your selected map locations. Pickup and destination are
-              currently saved as map coordinates.
+              Fare is an estimate based on the driving distance
+              calculated from your selected map locations. Pickup
+              and destination are currently saved as map coordinates.
             </p>
           </section>
 
@@ -598,7 +642,9 @@ function RiderDashboard({ user, onLogout }) {
             <div className="ride-history-heading">
               <div>
                 <span className="rider-eyebrow">YOUR ACTIVITY</span>
+
                 <h2>Recent rides</h2>
+
                 <small className="ride-auto-refresh-label">
                   Auto-refresh every 15 seconds
                 </small>
@@ -674,6 +720,7 @@ function RiderDashboard({ user, onLogout }) {
 
                       <div className="ride-history-bottom">
                         <span>{formatDate(ride.createdAt)}</span>
+
                         <strong>
                           {formatCurrency(ride.fare)}
                         </strong>
@@ -681,6 +728,7 @@ function RiderDashboard({ user, onLogout }) {
 
                       <div className="ride-driver-name">
                         <UserRound size={15} />
+
                         <span>
                           Driver: {ride.driverName || "Not assigned"}
                         </span>

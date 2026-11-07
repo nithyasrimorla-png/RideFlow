@@ -40,13 +40,25 @@ function MapClickHandler({ onMapClick }) {
   return null;
 }
 
-function RideLocationPicker({ onRouteChange }) {
+function RideLocationPicker({ onRouteChange, resetKey }) {
   const [pickup, setPickup] = useState(null);
   const [destination, setDestination] = useState(null);
   const [routeCoordinates, setRouteCoordinates] = useState([]);
   const [distanceKm, setDistanceKm] = useState(null);
   const [loadingRoute, setLoadingRoute] = useState(false);
   const [routeError, setRouteError] = useState("");
+
+  // Reset the map whenever the parent increments resetKey.
+  useEffect(() => {
+    setPickup(null);
+    setDestination(null);
+    setRouteCoordinates([]);
+    setDistanceKm(null);
+    setRouteError("");
+    setLoadingRoute(false);
+
+    onRouteChange?.(null);
+  }, [resetKey, onRouteChange]);
 
   const handleMapClick = (coordinates) => {
     setRouteError("");
@@ -70,10 +82,12 @@ function RideLocationPicker({ onRouteChange }) {
     setRouteCoordinates([]);
     setDistanceKm(null);
     setRouteError("");
+    setLoadingRoute(false);
 
     onRouteChange?.(null);
   };
 
+  // Calculate driving route using OSRM.
   useEffect(() => {
     if (!pickup || !destination) return;
 
@@ -84,6 +98,7 @@ function RideLocationPicker({ onRouteChange }) {
       setRouteError("");
       setDistanceKm(null);
       setRouteCoordinates([]);
+
       onRouteChange?.(null);
 
       try {
@@ -106,10 +121,13 @@ function RideLocationPicker({ onRouteChange }) {
         const data = await response.json();
 
         if (data.code !== "Ok" || !data.routes?.length) {
-          throw new Error("No driving route found between these locations.");
+          throw new Error(
+            "No driving route found between these locations."
+          );
         }
 
         const route = data.routes[0];
+
         const calculatedDistance = Number(
           (route.distance / 1000).toFixed(2)
         );
@@ -150,7 +168,9 @@ function RideLocationPicker({ onRouteChange }) {
         <div>
           <span className="rider-eyebrow">MAP BOOKING</span>
           <h3>Select your journey</h3>
-          <p>Click once for pickup and again for destination.</p>
+          <p>
+            Click once for pickup and again for destination.
+          </p>
         </div>
 
         <button
@@ -201,6 +221,7 @@ function RideLocationPicker({ onRouteChange }) {
       <div className="ride-map-details">
         <div className="ride-map-location">
           <span className="ride-map-dot pickup-dot" />
+
           <div>
             <strong>Pickup location</strong>
             <small>
@@ -213,6 +234,7 @@ function RideLocationPicker({ onRouteChange }) {
 
         <div className="ride-map-location">
           <span className="ride-map-dot drop-dot" />
+
           <div>
             <strong>Destination</strong>
             <small>
@@ -242,8 +264,8 @@ function RideLocationPicker({ onRouteChange }) {
       )}
 
       <p className="ride-map-disclaimer">
-        Map data © OpenStreetMap contributors. Route estimates provided
-        by OSRM and may vary from actual travel.
+        Map data © OpenStreetMap contributors. Route estimates
+        provided by OSRM and may vary from actual travel.
       </p>
     </section>
   );
