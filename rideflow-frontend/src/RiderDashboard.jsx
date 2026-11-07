@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import {
@@ -18,6 +17,8 @@ import {
   UserRound,
   XCircle,
 } from "lucide-react";
+
+import RideLocationPicker from "./components/RideLocationPicker";
 
 const RIDE_API = "http://localhost:8080/api/rides";
 const FARE_API = "http://localhost:8080/api/fares";
@@ -54,6 +55,16 @@ function formatCurrency(amount) {
     currency: "INR",
     maximumFractionDigits: 2,
   }).format(Number(amount || 0));
+}
+
+function formatCoordinates(coordinates) {
+  if (!Array.isArray(coordinates) || coordinates.length !== 2) {
+    return "";
+  }
+
+  const [latitude, longitude] = coordinates;
+
+  return `Lat: ${latitude.toFixed(5)}, Lng: ${longitude.toFixed(5)}`;
 }
 
 function getErrorMessage(err, fallback) {
@@ -126,6 +137,25 @@ function RiderDashboard({ user, onLogout }) {
 
   const isFetchingRef = useRef(false);
 
+  // Keep this callback stable so the map does not repeatedly
+  // request the same route because of parent re-renders.
+  const handleRouteChange = useCallback((route) => {
+    setFare(null);
+    setError("");
+    setSuccess("");
+
+    if (!route) {
+      setPickupLocation("");
+      setDropLocation("");
+      setDistanceKm("");
+      return;
+    }
+
+    setPickupLocation(formatCoordinates(route.pickup));
+    setDropLocation(formatCoordinates(route.destination));
+    setDistanceKm(String(route.distanceKm));
+  }, []);
+
   const fetchRides = useCallback(
     async ({ silent = false } = {}) => {
       if (!user?.userId) {
@@ -192,20 +222,18 @@ function RiderDashboard({ user, onLogout }) {
     setFare(null);
 
     const distance = Number(distanceKm);
-    const pickup = pickupLocation.trim();
-    const drop = dropLocation.trim();
 
-    if (!pickup || !drop) {
-      setError("Please enter both pickup and destination locations.");
+    if (!pickupLocation || !dropLocation) {
+      setError("Please select both pickup and destination on the map.");
       return;
     }
 
     if (!Number.isFinite(distance) || distance <= 0) {
-      setError("Please enter a valid distance greater than zero.");
+      setError("Please select two valid locations to calculate the route.");
       return;
     }
 
-    if (pickup.toLowerCase() === drop.toLowerCase()) {
+    if (pickupLocation === dropLocation) {
       setError("Pickup and destination cannot be the same.");
       return;
     }
@@ -236,6 +264,11 @@ function RiderDashboard({ user, onLogout }) {
       return;
     }
 
+    if (!pickupLocation || !dropLocation || !distanceKm) {
+      setError("Please select your pickup and destination on the map.");
+      return;
+    }
+
     setBooking(true);
     setError("");
     setSuccess("");
@@ -243,8 +276,8 @@ function RiderDashboard({ user, onLogout }) {
     try {
       const response = await axios.post(`${RIDE_API}/book`, {
         riderId: user.userId,
-        pickupLocation: pickupLocation.trim(),
-        dropLocation: dropLocation.trim(),
+        pickupLocation,
+        dropLocation,
         distanceKm: Number(distanceKm),
       });
 
@@ -295,7 +328,6 @@ function RiderDashboard({ user, onLogout }) {
         `${RIDE_API}/${ride.rideId}/cancel/${user.userId}`
       );
 
-      // Update the UI immediately after successful cancellation.
       setRides((previousRides) =>
         previousRides.map((item) =>
           item.rideId === ride.rideId
@@ -309,7 +341,6 @@ function RiderDashboard({ user, onLogout }) {
           `Ride #${ride.rideId} has been cancelled successfully.`
       );
 
-      // Retrieve the latest ride information from the backend.
       await fetchRides({ silent: true });
     } catch (err) {
       setError(
@@ -434,7 +465,7 @@ function RiderDashboard({ user, onLogout }) {
                 <span className="rider-eyebrow">BOOK A RIDE</span>
                 <h2>Plan your journey.</h2>
                 <p>
-                  Enter your trip details to see the estimated fare.
+                  Select your pickup and destination on the map.
                 </p>
               </div>
 
@@ -455,73 +486,51 @@ function RiderDashboard({ user, onLogout }) {
               </div>
             )}
 
+            <RideLocationPicker onRouteChange={handleRouteChange} />
+
+            <div className="rider-selected-route">
+              <div className="rider-selected-location">
+                <MapPin size={17} />
+                <div>
+                  <strong>Selected pickup</strong>
+                  <span>
+                    {pickupLocation || "Not selected yet"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="rider-selected-location">
+                <Navigation size={17} />
+                <div>
+                  <strong>Selected destination</strong>
+                  <span>
+                    {dropLocation || "Not selected yet"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="rider-selected-location">
+                <Route size={17} />
+                <div>
+                  <strong>Driving distance</strong>
+                  <span>
+                    {distanceKm ? `${distanceKm} km` : "Waiting for route"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
             <form onSubmit={handleFareEstimate}>
-              <label htmlFor="pickupLocation">
-                Pickup location
-              </label>
-
-              <div className="rider-location-input">
-                <MapPin size={19} />
-
-                <input
-                  id="pickupLocation"
-                  type="text"
-                  placeholder="Enter your pickup location"
-                  value={pickupLocation}
-                  onChange={(event) => {
-                    setPickupLocation(event.target.value);
-                    setFare(null);
-                  }}
-                  required
-                />
-              </div>
-
-              <label htmlFor="dropLocation">
-                Destination
-              </label>
-
-              <div className="rider-location-input">
-                <Navigation size={19} />
-
-                <input
-                  id="dropLocation"
-                  type="text"
-                  placeholder="Where are you going?"
-                  value={dropLocation}
-                  onChange={(event) => {
-                    setDropLocation(event.target.value);
-                    setFare(null);
-                  }}
-                  required
-                />
-              </div>
-
-              <label htmlFor="distanceKm">
-                Trip distance (km)
-              </label>
-
-              <div className="rider-location-input">
-                <Route size={19} />
-
-                <input
-                  id="distanceKm"
-                  type="number"
-                  min="0.1"
-                  step="0.1"
-                  placeholder="Enter estimated distance"
-                  value={distanceKm}
-                  onChange={(event) => {
-                    setDistanceKm(event.target.value);
-                    setFare(null);
-                  }}
-                  required
-                />
-              </div>
-
               <button
                 type="submit"
                 className="rider-estimate-button"
-                disabled={loadingFare || booking}
+                disabled={
+                  loadingFare ||
+                  booking ||
+                  !pickupLocation ||
+                  !dropLocation ||
+                  !distanceKm
+                }
               >
                 {loadingFare ? "Calculating..." : "Calculate fare"}
 
@@ -579,7 +588,9 @@ function RiderDashboard({ user, onLogout }) {
             )}
 
             <p className="fare-disclaimer">
-              Fare is an estimate based on the distance you enter.
+              Fare is an estimate based on the driving distance calculated
+              from your selected map locations. Pickup and destination are
+              currently saved as map coordinates.
             </p>
           </section>
 
