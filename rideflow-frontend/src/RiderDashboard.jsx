@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+
+import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import {
   CarFront,
@@ -12,15 +13,33 @@ import {
   CheckCircle2,
   CalendarDays,
   Route,
+  AlertCircle,
+  LoaderCircle,
+  UserRound,
+  XCircle,
 } from "lucide-react";
 
 const RIDE_API = "http://localhost:8080/api/rides";
 const FARE_API = "http://localhost:8080/api/fares";
+const REFRESH_INTERVAL = 15000;
+
+const RIDE_STEPS = [
+  "REQUESTED",
+  "ACCEPTED",
+  "ONGOING",
+  "COMPLETED",
+];
 
 function formatDate(date) {
   if (!date) return "Date unavailable";
 
-  return new Date(date).toLocaleString("en-IN", {
+  const parsedDate = new Date(date);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "Date unavailable";
+  }
+
+  return parsedDate.toLocaleString("en-IN", {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -37,65 +56,156 @@ function formatCurrency(amount) {
   }).format(Number(amount || 0));
 }
 
+function getErrorMessage(err, fallback) {
+  return (
+    err.response?.data?.message ||
+    err.response?.data?.error ||
+    fallback
+  );
+}
+
+function RideProgress({ status }) {
+  const currentStep = RIDE_STEPS.indexOf(status);
+
+  if (status === "CANCELLED") {
+    return (
+      <div className="ride-progress ride-progress-cancelled">
+        <span className="ride-progress-cancelled-label">
+          <AlertCircle size={15} />
+          Ride cancelled
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="ride-progress">
+      {RIDE_STEPS.map((step, index) => {
+        const completed = currentStep >= index;
+        const current = currentStep === index;
+
+        return (
+          <div
+            className={`ride-progress-step ${
+              completed ? "completed" : ""
+            } ${current ? "current" : ""}`}
+            key={step}
+          >
+            <div className="ride-progress-marker">
+              {completed ? (
+                <CheckCircle2 size={16} />
+              ) : (
+                <span>{index + 1}</span>
+              )}
+            </div>
+
+            <small>{step}</small>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function RiderDashboard({ user, onLogout }) {
   const [rides, setRides] = useState([]);
   const [loadingRides, setLoadingRides] = useState(true);
+
   const [pickupLocation, setPickupLocation] = useState("");
   const [dropLocation, setDropLocation] = useState("");
   const [distanceKm, setDistanceKm] = useState("");
+
   const [fare, setFare] = useState(null);
   const [loadingFare, setLoadingFare] = useState(false);
   const [booking, setBooking] = useState(false);
+
+  const [cancelingRideId, setCancelingRideId] = useState(null);
+
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const fetchRides = useCallback(async () => {
-    if (!user?.userId) return;
+  const isFetchingRef = useRef(false);
 
-    setLoadingRides(true);
+  const fetchRides = useCallback(
+    async ({ silent = false } = {}) => {
+      if (!user?.userId) {
+        setError("Rider account information is missing. Please log in again.");
+        setLoadingRides(false);
+        return;
+      }
 
-    try {
-      const response = await axios.get(
-        `${RIDE_API}/rider/${user.userId}`
-      );
+      if (isFetchingRef.current) return;
 
-      setRides(Array.isArray(response.data) ? response.data : []);
-    } catch (err) {
-      setError(
-        err.response?.data?.message ||
-          "Unable to load your ride history."
-      );
-    } finally {
-      setLoadingRides(false);
-    }
-  }, [user?.userId]);
+      isFetchingRef.current = true;
+
+      if (!silent) {
+        setLoadingRides(true);
+        setError("");
+      }
+
+      try {
+        const response = await axios.get(
+          `${RIDE_API}/rider/${user.userId}`
+        );
+
+        const fetchedRides = Array.isArray(response.data)
+          ? response.data
+          : [];
+
+        setRides(fetchedRides);
+        setError("");
+      } catch (err) {
+        setError(
+          getErrorMessage(
+            err,
+            "Unable to load your ride history."
+          )
+        );
+      } finally {
+        isFetchingRef.current = false;
+
+        if (!silent) {
+          setLoadingRides(false);
+        }
+      }
+    },
+    [user?.userId]
+  );
 
   useEffect(() => {
     fetchRides();
+
+    const intervalId = window.setInterval(() => {
+      fetchRides({ silent: true });
+    }, REFRESH_INTERVAL);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
   }, [fetchRides]);
 
   const handleFareEstimate = async (event) => {
     event.preventDefault();
+
     setError("");
     setSuccess("");
     setFare(null);
 
     const distance = Number(distanceKm);
+    const pickup = pickupLocation.trim();
+    const drop = dropLocation.trim();
 
-    if (!pickupLocation.trim() || !dropLocation.trim()) {
+    if (!pickup || !drop) {
       setError("Please enter both pickup and destination locations.");
       return;
     }
 
-    if (
-      !Number.isFinite(distance) ||
-      distance <= 0
-    ) {
+    if (!Number.isFinite(distance) || distance <= 0) {
       setError("Please enter a valid distance greater than zero.");
       return;
     }
 
-    if (pickupLocation.trim().toLowerCase() === dropLocation.trim().toLowerCase()) {
+    if (pickup.toLowerCase() === drop.toLowerCase()) {
       setError("Pickup and destination cannot be the same.");
       return;
     }
@@ -110,8 +220,10 @@ function RiderDashboard({ user, onLogout }) {
       setFare(response.data);
     } catch (err) {
       setError(
-        err.response?.data?.message ||
+        getErrorMessage(
+          err,
           "Unable to calculate fare. Please check the backend."
+        )
       );
     } finally {
       setLoadingFare(false);
@@ -137,7 +249,8 @@ function RiderDashboard({ user, onLogout }) {
       });
 
       setSuccess(
-        response.data.message || "Your ride has been booked successfully!"
+        response.data.message ||
+          "Your ride has been booked successfully!"
       );
 
       setPickupLocation("");
@@ -148,11 +261,65 @@ function RiderDashboard({ user, onLogout }) {
       await fetchRides();
     } catch (err) {
       setError(
-        err.response?.data?.message ||
+        getErrorMessage(
+          err,
           "Unable to book your ride. Please try again."
+        )
       );
     } finally {
       setBooking(false);
+    }
+  };
+
+  // Cancel a ride that has not started yet.
+  const handleCancelRide = async (ride) => {
+    const canCancel = ["REQUESTED", "ACCEPTED"].includes(ride.status);
+
+    if (!canCancel) {
+      setError("This ride can no longer be cancelled.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Are you sure you want to cancel Ride #${ride.rideId}?`
+    );
+
+    if (!confirmed) return;
+
+    setCancelingRideId(ride.rideId);
+    setError("");
+    setSuccess("");
+
+    try {
+      const response = await axios.put(
+        `${RIDE_API}/${ride.rideId}/cancel/${user.userId}`
+      );
+
+      // Update the UI immediately after successful cancellation.
+      setRides((previousRides) =>
+        previousRides.map((item) =>
+          item.rideId === ride.rideId
+            ? { ...item, status: "CANCELLED" }
+            : item
+        )
+      );
+
+      setSuccess(
+        response.data?.message ||
+          `Ride #${ride.rideId} has been cancelled successfully.`
+      );
+
+      // Retrieve the latest ride information from the backend.
+      await fetchRides({ silent: true });
+    } catch (err) {
+      setError(
+        getErrorMessage(
+          err,
+          "Unable to cancel this ride. Please try again."
+        )
+      );
+    } finally {
+      setCancelingRideId(null);
     }
   };
 
@@ -167,6 +334,10 @@ function RiderDashboard({ user, onLogout }) {
   const activeRides = rides.filter(
     (ride) => ["ACCEPTED", "ONGOING"].includes(ride.status)
   ).length;
+
+  const handleManualRefresh = () => {
+    fetchRides();
+  };
 
   return (
     <div className="rider-dashboard">
@@ -183,10 +354,11 @@ function RiderDashboard({ user, onLogout }) {
         <div className="rider-topbar-right">
           <div className="rider-profile">
             <div className="rider-avatar">
-              {user.name?.charAt(0)?.toUpperCase() || "R"}
+              {user?.name?.charAt(0)?.toUpperCase() || "R"}
             </div>
+
             <div>
-              <strong>{user.name}</strong>
+              <strong>{user?.name || "Rider"}</strong>
               <small>Rider account</small>
             </div>
           </div>
@@ -202,7 +374,9 @@ function RiderDashboard({ user, onLogout }) {
         <section className="rider-welcome">
           <div>
             <span className="rider-eyebrow">RIDER DASHBOARD</span>
-            <h1>Hello, {user.name?.split(" ")[0] || "there"}!</h1>
+            <h1>
+              Hello, {user?.name?.split(" ")[0] || "there"}!
+            </h1>
             <p>Where would you like to go today?</p>
           </div>
 
@@ -259,14 +433,22 @@ function RiderDashboard({ user, onLogout }) {
               <div>
                 <span className="rider-eyebrow">BOOK A RIDE</span>
                 <h2>Plan your journey.</h2>
-                <p>Enter your trip details to see the estimated fare.</p>
+                <p>
+                  Enter your trip details to see the estimated fare.
+                </p>
               </div>
+
               <div className="booking-heading-icon">
                 <Navigation size={23} />
               </div>
             </div>
 
-            {error && <div className="rider-alert rider-alert-error">{error}</div>}
+            {error && (
+              <div className="rider-alert rider-alert-error">
+                {error}
+              </div>
+            )}
+
             {success && (
               <div className="rider-alert rider-alert-success">
                 {success}
@@ -274,9 +456,13 @@ function RiderDashboard({ user, onLogout }) {
             )}
 
             <form onSubmit={handleFareEstimate}>
-              <label htmlFor="pickupLocation">Pickup location</label>
+              <label htmlFor="pickupLocation">
+                Pickup location
+              </label>
+
               <div className="rider-location-input">
                 <MapPin size={19} />
+
                 <input
                   id="pickupLocation"
                   type="text"
@@ -290,9 +476,13 @@ function RiderDashboard({ user, onLogout }) {
                 />
               </div>
 
-              <label htmlFor="dropLocation">Destination</label>
+              <label htmlFor="dropLocation">
+                Destination
+              </label>
+
               <div className="rider-location-input">
                 <Navigation size={19} />
+
                 <input
                   id="dropLocation"
                   type="text"
@@ -306,9 +496,13 @@ function RiderDashboard({ user, onLogout }) {
                 />
               </div>
 
-              <label htmlFor="distanceKm">Trip distance (km)</label>
+              <label htmlFor="distanceKm">
+                Trip distance (km)
+              </label>
+
               <div className="rider-location-input">
                 <Route size={19} />
+
                 <input
                   id="distanceKm"
                   type="number"
@@ -330,6 +524,7 @@ function RiderDashboard({ user, onLogout }) {
                 disabled={loadingFare || booking}
               >
                 {loadingFare ? "Calculating..." : "Calculate fare"}
+
                 {!loadingFare && <ArrowRight size={18} />}
               </button>
             </form>
@@ -339,8 +534,11 @@ function RiderDashboard({ user, onLogout }) {
                 <div className="fare-result-heading">
                   <div>
                     <span>ESTIMATED FARE</span>
-                    <strong>{formatCurrency(fare.totalFare)}</strong>
+                    <strong>
+                      {formatCurrency(fare.totalFare)}
+                    </strong>
                   </div>
+
                   <Wallet size={25} />
                 </div>
 
@@ -349,13 +547,19 @@ function RiderDashboard({ user, onLogout }) {
                     <span>Distance</span>
                     <strong>{fare.distanceKm} km</strong>
                   </div>
+
                   <div>
                     <span>Base fare</span>
-                    <strong>{formatCurrency(fare.baseFare)}</strong>
+                    <strong>
+                      {formatCurrency(fare.baseFare)}
+                    </strong>
                   </div>
+
                   <div>
                     <span>Distance fare</span>
-                    <strong>{formatCurrency(fare.distanceFare)}</strong>
+                    <strong>
+                      {formatCurrency(fare.distanceFare)}
+                    </strong>
                   </div>
                 </div>
 
@@ -365,7 +569,10 @@ function RiderDashboard({ user, onLogout }) {
                   onClick={handleBookRide}
                   disabled={booking}
                 >
-                  {booking ? "Booking your ride..." : "Confirm and book ride"}
+                  {booking
+                    ? "Booking your ride..."
+                    : "Confirm and book ride"}
+
                   {!booking && <ArrowRight size={18} />}
                 </button>
               </div>
@@ -381,66 +588,121 @@ function RiderDashboard({ user, onLogout }) {
               <div>
                 <span className="rider-eyebrow">YOUR ACTIVITY</span>
                 <h2>Recent rides</h2>
+                <small className="ride-auto-refresh-label">
+                  Auto-refresh every 15 seconds
+                </small>
               </div>
 
               <button
                 className="ride-refresh-button"
-                onClick={fetchRides}
+                onClick={handleManualRefresh}
                 disabled={loadingRides}
                 aria-label="Refresh ride history"
+                title="Refresh ride history"
               >
-                <RefreshCw size={17} />
+                <RefreshCw
+                  size={17}
+                  className={loadingRides ? "ride-spin" : ""}
+                />
               </button>
             </div>
 
             {loadingRides ? (
               <div className="ride-empty-state">
-                Loading your rides...
+                <LoaderCircle size={28} className="ride-spin" />
+                <p>Loading your rides...</p>
               </div>
             ) : rides.length === 0 ? (
               <div className="ride-empty-state">
                 <div className="ride-empty-icon">
                   <CarFront size={30} />
                 </div>
+
                 <h3>No rides yet</h3>
                 <p>Your booked rides will appear here.</p>
               </div>
             ) : (
               <div className="ride-list">
-                {rides.map((ride) => (
-                  <article className="ride-history-item" key={ride.rideId}>
-                    <div className="ride-history-top">
-                      <span className="ride-id">
-                        Ride #{ride.rideId}
-                      </span>
-                      <span
-                        className={`ride-status ride-status-${ride.status?.toLowerCase()}`}
-                      >
-                        {ride.status}
-                      </span>
-                    </div>
+                {rides.map((ride) => {
+                  const canCancel = [
+                    "REQUESTED",
+                    "ACCEPTED",
+                  ].includes(ride.status);
 
-                    <div className="ride-route">
-                      <div className="ride-route-line">
-                        <span className="route-dot pickup-dot"></span>
-                        <span>{ride.pickupLocation}</span>
+                  const isCanceling =
+                    cancelingRideId === ride.rideId;
+
+                  return (
+                    <article
+                      className="ride-history-item"
+                      key={ride.rideId}
+                    >
+                      <div className="ride-history-top">
+                        <span className="ride-id">
+                          Ride #{ride.rideId}
+                        </span>
+
+                        <span
+                          className={`ride-status ride-status-${ride.status?.toLowerCase()}`}
+                        >
+                          {ride.status}
+                        </span>
                       </div>
-                      <div className="ride-route-line">
-                        <span className="route-dot drop-dot"></span>
-                        <span>{ride.dropLocation}</span>
+
+                      <div className="ride-route">
+                        <div className="ride-route-line">
+                          <span className="route-dot pickup-dot" />
+                          <span>{ride.pickupLocation}</span>
+                        </div>
+
+                        <div className="ride-route-line">
+                          <span className="route-dot drop-dot" />
+                          <span>{ride.dropLocation}</span>
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="ride-history-bottom">
-                      <span>{formatDate(ride.createdAt)}</span>
-                      <strong>{formatCurrency(ride.fare)}</strong>
-                    </div>
+                      <div className="ride-history-bottom">
+                        <span>{formatDate(ride.createdAt)}</span>
+                        <strong>
+                          {formatCurrency(ride.fare)}
+                        </strong>
+                      </div>
 
-                    <div className="ride-driver-name">
-                      Driver: {ride.driverName || "Not assigned"}
-                    </div>
-                  </article>
-                ))}
+                      <div className="ride-driver-name">
+                        <UserRound size={15} />
+                        <span>
+                          Driver: {ride.driverName || "Not assigned"}
+                        </span>
+                      </div>
+
+                      <RideProgress status={ride.status} />
+
+                      {canCancel && (
+                        <button
+                          type="button"
+                          className="ride-cancel-button"
+                          onClick={() => handleCancelRide(ride)}
+                          disabled={cancelingRideId !== null}
+                        >
+                          {isCanceling ? (
+                            <>
+                              <LoaderCircle
+                                size={16}
+                                className="ride-spin"
+                              />
+                              Cancelling...
+                            </>
+                          ) : (
+                            <>
+                              <XCircle size={16} />
+                              Cancel ride
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </article>
+                  );
+                })}
               </div>
             )}
           </section>
