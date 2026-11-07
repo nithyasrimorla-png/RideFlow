@@ -178,6 +178,14 @@ function RideCard({
 export default function DriverDashboard({ user, onLogout }) {
   const [availableRides, setAvailableRides] = useState([]);
   const [myRides, setMyRides] = useState([]);
+
+  const [dashboardStats, setDashboardStats] = useState({
+    totalRides: 0,
+    completedRides: 0,
+    activeRides: 0,
+    totalEarnings: 0,
+  });
+
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [availabilityLoading, setAvailabilityLoading] = useState(true);
@@ -203,16 +211,26 @@ export default function DriverDashboard({ user, onLogout }) {
       const [
         availableResponse,
         myRidesResponse,
-        availabilityResponse,
+        dashboardResponse,
       ] = await Promise.all([
         axios.get(`${RIDE_API}/available/${driverId}`),
         axios.get(`${RIDE_API}/driver/${driverId}`),
-        axios.get(`${DRIVER_API}/${driverId}/availability`),
+        axios.get(`${DRIVER_API}/${driverId}/dashboard`),
       ]);
 
       setAvailableRides(extractRides(availableResponse.data));
       setMyRides(extractRides(myRidesResponse.data));
-      setIsOnline(Boolean(availabilityResponse.data?.available));
+
+      const stats = dashboardResponse.data || {};
+
+      setDashboardStats({
+        totalRides: Number(stats.totalRides) || 0,
+        completedRides: Number(stats.completedRides) || 0,
+        activeRides: Number(stats.activeRides) || 0,
+        totalEarnings: Number(stats.totalEarnings) || 0,
+      });
+
+      setIsOnline(Boolean(stats.availability));
     } catch (requestError) {
       setError(getErrorMessage(requestError));
     } finally {
@@ -251,6 +269,8 @@ export default function DriverDashboard({ user, onLogout }) {
       if (nextAvailability) {
         setActiveTab("available");
       }
+
+      await fetchDashboardData();
     } catch (requestError) {
       setError(getErrorMessage(requestError));
     } finally {
@@ -319,11 +339,6 @@ export default function DriverDashboard({ user, onLogout }) {
 
   const completedRides = myRides.filter(
     (ride) => ride.status === "COMPLETED"
-  );
-
-  const totalEarnings = completedRides.reduce(
-    (total, ride) => total + (Number(ride.fare) || 0),
-    0
   );
 
   const displayedRides =
@@ -440,25 +455,28 @@ export default function DriverDashboard({ user, onLogout }) {
           <StatCard
             icon={Route}
             label="Total rides"
-            value={myRides.length}
+            value={dashboardStats.totalRides}
             detail="Your assigned rides"
           />
+
           <StatCard
             icon={CheckCircle2}
             label="Completed rides"
-            value={completedRides.length}
+            value={dashboardStats.completedRides}
             detail="Successfully completed"
           />
+
           <StatCard
             icon={Clock3}
             label="Active rides"
-            value={acceptedRides.length + ongoingRides.length}
+            value={dashboardStats.activeRides}
             detail="Accepted and ongoing"
           />
+
           <StatCard
             icon={Wallet}
             label="Total earnings"
-            value={formatCurrency(totalEarnings)}
+            value={formatCurrency(dashboardStats.totalEarnings)}
             detail="From completed rides"
           />
         </section>
