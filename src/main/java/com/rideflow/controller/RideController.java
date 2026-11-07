@@ -118,7 +118,6 @@ public class RideController {
         }
     }
 
-    // View rider ride history
     @GetMapping("/rider/{riderId}")
     public ResponseEntity<?> getRiderHistory(
             @PathVariable Long riderId) {
@@ -165,7 +164,6 @@ public class RideController {
         return ResponseEntity.ok(history);
     }
 
-  
     @GetMapping("/available/{driverId}")
     public ResponseEntity<?> getAvailableRides(
             @PathVariable Long driverId) {
@@ -187,13 +185,13 @@ public class RideController {
         List<Map<String, Object>> availableRides =
                 rideRepository.findByStatus(Ride.RideStatus.REQUESTED)
                         .stream()
+                        .filter(ride -> ride.getDriver() == null)
                         .<Map<String, Object>>map(this::convertRideToResponse)
                         .toList();
 
         return ResponseEntity.ok(availableRides);
     }
 
-   
     @PutMapping("/{rideId}/accept/{driverId}")
     public ResponseEntity<?> acceptRide(
             @PathVariable Long rideId,
@@ -318,7 +316,6 @@ public class RideController {
                 "status", updatedRide.getStatus().toString()
         ));
     }
-
 
     @PutMapping("/{rideId}/cancel/{userId}")
     public ResponseEntity<?> cancelRide(
