@@ -1,5 +1,5 @@
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import {
   CarFront,
@@ -20,6 +20,7 @@ import {
 
 const RIDE_API = "http://localhost:8080/api/rides";
 const DRIVER_API = "http://localhost:8080/api/drivers";
+const REFRESH_INTERVAL = 15000;
 
 function getErrorMessage(error) {
   return (
@@ -194,57 +195,87 @@ export default function DriverDashboard({ user, onLogout }) {
   const [success, setSuccess] = useState("");
   const [activeTab, setActiveTab] = useState("available");
 
+  const isFetchingRef = useRef(false);
+
   const driverId = user?.userId;
 
-  const fetchDashboardData = useCallback(async () => {
-    if (!driverId) {
-      setError("Driver account information is missing. Please log in again.");
-      setLoading(false);
-      setAvailabilityLoading(false);
-      return;
-    }
+  const fetchDashboardData = useCallback(
+    async ({ silent = false } = {}) => {
+      if (!driverId) {
+        setError("Driver account information is missing. Please log in again.");
+        setLoading(false);
+        setAvailabilityLoading(false);
+        return;
+      }
 
-    setLoading(true);
-    setError("");
+      if (isFetchingRef.current) return;
 
-    try {
-      const [
-        availableResponse,
-        myRidesResponse,
-        dashboardResponse,
-      ] = await Promise.all([
-        axios.get(`${RIDE_API}/available/${driverId}`),
-        axios.get(`${RIDE_API}/driver/${driverId}`),
-        axios.get(`${DRIVER_API}/${driverId}/dashboard`),
-      ]);
+      isFetchingRef.current = true;
 
-      setAvailableRides(extractRides(availableResponse.data));
-      setMyRides(extractRides(myRidesResponse.data));
+      if (!silent) {
+        setLoading(true);
+        setError("");
+      }
 
-      const stats = dashboardResponse.data || {};
+      try {
+        const [
+          availableResponse,
+          myRidesResponse,
+          dashboardResponse,
+        ] = await Promise.all([
+          axios.get(`${RIDE_API}/available/${driverId}`),
+          axios.get(`${RIDE_API}/driver/${driverId}`),
+          axios.get(`${DRIVER_API}/${driverId}/dashboard`),
+        ]);
 
-      setDashboardStats({
-        totalRides: Number(stats.totalRides) || 0,
-        completedRides: Number(stats.completedRides) || 0,
-        activeRides: Number(stats.activeRides) || 0,
-        totalEarnings: Number(stats.totalEarnings) || 0,
-      });
+        setAvailableRides(extractRides(availableResponse.data));
+        setMyRides(extractRides(myRidesResponse.data));
 
-      setIsOnline(Boolean(stats.availability));
-    } catch (requestError) {
-      setError(getErrorMessage(requestError));
-    } finally {
-      setLoading(false);
-      setAvailabilityLoading(false);
-    }
-  }, [driverId]);
+        const stats = dashboardResponse.data || {};
 
+        setDashboardStats({
+          totalRides: Number(stats.totalRides) || 0,
+          completedRides: Number(stats.completedRides) || 0,
+          activeRides: Number(stats.activeRides) || 0,
+          totalEarnings: Number(stats.totalEarnings) || 0,
+        });
+
+        // IMPORTANT: ONLINE/OFFLINE are strings.
+        // Boolean("OFFLINE") incorrectly returns true.
+        const availability = stats.availability;
+
+        setIsOnline(
+          availability === "ONLINE" || availability === true
+        );
+
+        setError("");
+      } catch (requestError) {
+        setError(getErrorMessage(requestError));
+      } finally {
+        isFetchingRef.current = false;
+
+        if (!silent) {
+          setLoading(false);
+          setAvailabilityLoading(false);
+        }
+      }
+    },
+    [driverId]
+  );
+
+  // Initial load and automatic refresh every 15 seconds.
   useEffect(() => {
     fetchDashboardData();
+
+    const intervalId = window.setInterval(() => {
+      fetchDashboardData({ silent: true });
+    }, REFRESH_INTERVAL);
+
+    return () => window.clearInterval(intervalId);
   }, [fetchDashboardData]);
 
   const handleAvailabilityToggle = async () => {
-    if (!driverId || availabilityLoading) return;
+    if (!driverId || availabilityLoading || actionLoading) return;
 
     const nextAvailability = !isOnline;
 
@@ -295,6 +326,7 @@ export default function DriverDashboard({ user, onLogout }) {
 
       setSuccess("Ride accepted successfully!");
       setActiveTab("accepted");
+
       await fetchDashboardData();
     } catch (requestError) {
       setError(getErrorMessage(requestError));
@@ -408,13 +440,14 @@ export default function DriverDashboard({ user, onLogout }) {
             <button
               className={`driver-availability-btn ${isOnline ? "online" : "offline"}`}
               onClick={handleAvailabilityToggle}
-              disabled={availabilityLoading || loading}
+              disabled={availabilityLoading || loading || actionLoading}
             >
               {availabilityLoading ? (
                 <LoaderCircle size={17} className="driver-spin" />
               ) : (
                 <Power size={17} />
               )}
+
               {availabilityLoading
                 ? "Updating..."
                 : isOnline
@@ -487,9 +520,10 @@ export default function DriverDashboard({ user, onLogout }) {
               <span className="driver-eyebrow">RIDE MANAGEMENT</span>
               <h2>Your rides</h2>
             </div>
+
             <span className="driver-live-label">
               <span />
-              Live data from server
+              Auto-refresh every 15 seconds
             </span>
           </div>
 
@@ -548,6 +582,7 @@ export default function DriverDashboard({ user, onLogout }) {
               </div>
               <h3>You're currently offline</h3>
               <p>Go online to view and accept new ride requests.</p>
+
               <button
                 className="driver-empty-refresh"
                 onClick={handleAvailabilityToggle}
@@ -566,16 +601,19 @@ export default function DriverDashboard({ user, onLogout }) {
                   <MapPin size={27} />
                 )}
               </div>
+
               <h3>
                 {activeTab === "available"
                   ? "No ride requests available"
                   : `No ${activeTab} rides yet`}
               </h3>
+
               <p>
                 {activeTab === "available"
                   ? "New ride requests will appear here when available."
                   : "Your rides will appear here as you accept and complete them."}
               </p>
+
               <button
                 className="driver-empty-refresh"
                 onClick={fetchDashboardData}
