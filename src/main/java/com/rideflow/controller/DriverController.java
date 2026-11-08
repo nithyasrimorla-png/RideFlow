@@ -8,6 +8,7 @@ import com.rideflow.repository.RideRepository;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,22 +19,31 @@ import java.util.Map;
 @CrossOrigin(origins = "*")
 public class DriverController {
 
+    private static final List<Ride.RideStatus> ACTIVE_STATUSES =
+            List.of(
+                    Ride.RideStatus.ACCEPTED,
+                    Ride.RideStatus.ONGOING
+            );
+
     private final UserRepository userRepository;
     private final RideRepository rideRepository;
 
     public DriverController(
             UserRepository userRepository,
             RideRepository rideRepository) {
+
         this.userRepository = userRepository;
         this.rideRepository = rideRepository;
     }
 
     @PutMapping("/{driverId}/availability")
+    @Transactional
     public ResponseEntity<?> updateAvailability(
             @PathVariable Long driverId,
             @RequestBody Map<String, Boolean> request) {
 
-        User driver = userRepository.findById(driverId).orElse(null);
+        User driver = userRepository.findByIdForUpdate(driverId)
+                .orElse(null);
 
         if (driver == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -52,14 +62,35 @@ public class DriverController {
                     .body(Map.of("message", "Availability status is required"));
         }
 
+        boolean busy = rideRepository.existsByDriverIdAndStatusIn(
+                driverId,
+                ACTIVE_STATUSES
+        );
+
+        if (!available && busy) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of(
+                            "message",
+                            "Complete or cancel your active ride before going offline.",
+                            "workStatus",
+                            "BUSY"
+                    ));
+        }
+
         driver.setAvailable(available);
         userRepository.save(driver);
+
+        String workStatus = !available
+                ? "OFFLINE"
+                : busy ? "BUSY" : "AVAILABLE";
 
         return ResponseEntity.ok(
                 Map.of(
                         "message", "Driver availability updated successfully",
                         "driverId", driver.getId(),
-                        "available", driver.isAvailable()
+                        "available", driver.isAvailable(),
+                        "status", driver.isAvailable() ? "ONLINE" : "OFFLINE",
+                        "workStatus", workStatus
                 )
         );
     }
@@ -80,12 +111,22 @@ public class DriverController {
                     .body(Map.of("message", "User is not a driver"));
         }
 
+        boolean busy = rideRepository.existsByDriverIdAndStatusIn(
+                driverId,
+                ACTIVE_STATUSES
+        );
+
+        String workStatus = !driver.isAvailable()
+                ? "OFFLINE"
+                : busy ? "BUSY" : "AVAILABLE";
+
         return ResponseEntity.ok(
                 Map.of(
                         "driverId", driver.getId(),
                         "name", driver.getName(),
                         "available", driver.isAvailable(),
-                        "status", driver.isAvailable() ? "ONLINE" : "OFFLINE"
+                        "status", driver.isAvailable() ? "ONLINE" : "OFFLINE",
+                        "workStatus", workStatus
                 )
         );
     }
@@ -93,18 +134,27 @@ public class DriverController {
     @GetMapping("/available")
     public ResponseEntity<?> getAvailableDrivers() {
 
-        List<User> drivers = userRepository.findByRoleAndAvailable(
+        List<User> onlineDrivers = userRepository.findByRoleAndAvailable(
                 User.Role.DRIVER,
                 true
         );
 
-        List<Map<String, Object>> response = drivers.stream()
+        List<Map<String, Object>> response = onlineDrivers.stream()
+                .filter(driver ->
+                        !rideRepository.existsByDriverIdAndStatusIn(
+                                driver.getId(),
+                                ACTIVE_STATUSES
+                        )
+                )
                 .map(driver -> Map.<String, Object>of(
                         "driverId", driver.getId(),
                         "name", driver.getName(),
-                        "phone", driver.getPhone(),
-                        "available", driver.isAvailable(),
-                        "status", "ONLINE"
+                        "phone", driver.getPhone() == null
+                                ? ""
+                                : driver.getPhone(),
+                        "available", true,
+                        "status", "ONLINE",
+                        "workStatus", "AVAILABLE"
                 ))
                 .toList();
 
@@ -156,11 +206,18 @@ public class DriverController {
                 Ride.RideStatus.COMPLETED
         );
 
+        String workStatus = !driver.isAvailable()
+                ? "OFFLINE"
+                : activeRides > 0 ? "BUSY" : "AVAILABLE";
+
         return ResponseEntity.ok(
                 Map.of(
                         "driverId", driver.getId(),
                         "driverName", driver.getName(),
-                        "availability", driver.isAvailable() ? "ONLINE" : "OFFLINE",
+                        "availability", driver.isAvailable()
+                                ? "ONLINE"
+                                : "OFFLINE",
+                        "workStatus", workStatus,
                         "totalRides", totalRides,
                         "completedRides", completedRides,
                         "activeRides", activeRides,

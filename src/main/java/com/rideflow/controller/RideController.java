@@ -9,6 +9,7 @@ import com.rideflow.service.FareService;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,6 +19,12 @@ import java.util.Map;
 @RequestMapping("/api/rides")
 @CrossOrigin(origins = "*")
 public class RideController {
+
+    private static final List<Ride.RideStatus> ACTIVE_STATUSES =
+            List.of(
+                    Ride.RideStatus.ACCEPTED,
+                    Ride.RideStatus.ONGOING
+            );
 
     private final RideRepository rideRepository;
     private final UserRepository userRepository;
@@ -43,13 +50,16 @@ public class RideController {
                 || request.get("distanceKm") == null) {
 
             return ResponseEntity.badRequest()
-                    .body(Map.of("message",
-                            "Rider ID, pickup, drop and distance are required"));
+                    .body(Map.of(
+                            "message",
+                            "Rider ID, pickup, drop and distance are required"
+                    ));
         }
 
         try {
             Long riderId = Long.parseLong(
-                    request.get("riderId").toString());
+                    request.get("riderId").toString()
+            );
 
             String pickupLocation =
                     request.get("pickupLocation").toString().trim();
@@ -58,14 +68,17 @@ public class RideController {
                     request.get("dropLocation").toString().trim();
 
             double distanceKm = Double.parseDouble(
-                    request.get("distanceKm").toString());
+                    request.get("distanceKm").toString()
+            );
 
             if (pickupLocation.isBlank()
                     || dropLocation.isBlank()) {
 
                 return ResponseEntity.badRequest()
-                        .body(Map.of("message",
-                                "Pickup and drop locations cannot be empty"));
+                        .body(Map.of(
+                                "message",
+                                "Pickup and drop locations cannot be empty"
+                        ));
             }
 
             User rider = userRepository.findById(riderId)
@@ -75,8 +88,10 @@ public class RideController {
                     || rider.getRole() != User.Role.RIDER) {
 
                 return ResponseEntity.badRequest()
-                        .body(Map.of("message",
-                                "Valid rider account not found"));
+                        .body(Map.of(
+                                "message",
+                                "Valid rider account not found"
+                        ));
             }
 
             Map<String, Object> fareDetails =
@@ -109,8 +124,10 @@ public class RideController {
 
         } catch (NumberFormatException e) {
             return ResponseEntity.badRequest()
-                    .body(Map.of("message",
-                            "Invalid rider ID or distance"));
+                    .body(Map.of(
+                            "message",
+                            "Invalid rider ID or distance"
+                    ));
 
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest()
@@ -178,7 +195,12 @@ public class RideController {
                     .body(Map.of("message", "Driver not found"));
         }
 
-        if (!driver.isAvailable()) {
+        boolean busy = rideRepository.existsByDriverIdAndStatusIn(
+                driverId,
+                ACTIVE_STATUSES
+        );
+
+        if (!driver.isAvailable() || busy) {
             return ResponseEntity.ok(List.of());
         }
 
@@ -193,11 +215,14 @@ public class RideController {
     }
 
     @PutMapping("/{rideId}/accept/{driverId}")
+    @Transactional
     public ResponseEntity<?> acceptRide(
             @PathVariable Long rideId,
             @PathVariable Long driverId) {
 
-        User driver = userRepository.findById(driverId)
+        // Lock this driver's database row to serialize
+        // simultaneous ride acceptance requests.
+        User driver = userRepository.findByIdForUpdate(driverId)
                 .orElse(null);
 
         if (driver == null
@@ -212,6 +237,22 @@ public class RideController {
                     .body(Map.of(
                             "message",
                             "You are offline. Go online to accept rides."
+                    ));
+        }
+
+        boolean alreadyBusy =
+                rideRepository.existsByDriverIdAndStatusIn(
+                        driverId,
+                        ACTIVE_STATUSES
+                );
+
+        if (alreadyBusy) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of(
+                            "message",
+                            "You already have an active ride. Complete or cancel it before accepting another ride.",
+                            "workStatus",
+                            "BUSY"
                     ));
         }
 
@@ -243,7 +284,8 @@ public class RideController {
                 "message", "Ride accepted successfully",
                 "rideId", rideId,
                 "driverName", driver.getName(),
-                "status", Ride.RideStatus.ACCEPTED.toString()
+                "status", Ride.RideStatus.ACCEPTED.toString(),
+                "workStatus", "BUSY"
         ));
     }
 
@@ -310,10 +352,21 @@ public class RideController {
 
         Ride updatedRide = rideRepository.save(ride);
 
+        boolean stillBusy =
+                rideRepository.existsByDriverIdAndStatusIn(
+                        driverId,
+                        ACTIVE_STATUSES
+                );
+
+        String workStatus = !driver.isAvailable()
+                ? "OFFLINE"
+                : stillBusy ? "BUSY" : "AVAILABLE";
+
         return ResponseEntity.ok(Map.of(
                 "message", "Ride status updated successfully",
                 "rideId", updatedRide.getId(),
-                "status", updatedRide.getStatus().toString()
+                "status", updatedRide.getStatus().toString(),
+                "workStatus", workStatus
         ));
     }
 

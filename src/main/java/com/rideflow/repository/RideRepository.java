@@ -27,6 +27,11 @@ public interface RideRepository extends JpaRepository<Ride, Long> {
             Ride.RideStatus status
     );
 
+    boolean existsByDriverIdAndStatusIn(
+            Long driverId,
+            List<Ride.RideStatus> statuses
+    );
+
     @Query("SELECT COALESCE(SUM(r.fare), 0) FROM Ride r " +
            "WHERE r.driver.id = :driverId " +
            "AND r.status = :status")
