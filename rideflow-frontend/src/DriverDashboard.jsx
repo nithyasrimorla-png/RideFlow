@@ -1,6 +1,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
+import DriverLocationSharing from "./components/DriverLocationSharing";
 import {
   CarFront,
   MapPin,
@@ -77,13 +78,7 @@ function StatCard({ icon: Icon, label, value, detail }) {
   );
 }
 
-function RideCard({
-  ride,
-  type,
-  loading,
-  onAccept,
-  onUpdateStatus,
-}) {
+function RideCard({ ride, type, loading, onAccept, onUpdateStatus }) {
   const rideId = ride.rideId ?? ride.id;
   const pickup = ride.pickupLocation || "Pickup location unavailable";
   const drop = ride.dropLocation || "Drop location unavailable";
@@ -196,7 +191,6 @@ export default function DriverDashboard({ user, onLogout }) {
   const [activeTab, setActiveTab] = useState("available");
 
   const isFetchingRef = useRef(false);
-
   const driverId = user?.userId;
 
   const fetchDashboardData = useCallback(
@@ -240,8 +234,6 @@ export default function DriverDashboard({ user, onLogout }) {
           totalEarnings: Number(stats.totalEarnings) || 0,
         });
 
-        // IMPORTANT: ONLINE/OFFLINE are strings.
-        // Boolean("OFFLINE") incorrectly returns true.
         const availability = stats.availability;
 
         setIsOnline(
@@ -263,7 +255,6 @@ export default function DriverDashboard({ user, onLogout }) {
     [driverId]
   );
 
-  // Initial load and automatic refresh every 15 seconds.
   useEffect(() => {
     fetchDashboardData();
 
@@ -373,6 +364,10 @@ export default function DriverDashboard({ user, onLogout }) {
     (ride) => ride.status === "COMPLETED"
   );
 
+  // The backend stores one latest location per driver.
+  // Use one GPS watcher for the driver's active rides.
+  const trackingRide = acceptedRides[0] || ongoingRides[0];
+
   const displayedRides =
     activeTab === "available"
       ? isOnline
@@ -398,7 +393,9 @@ export default function DriverDashboard({ user, onLogout }) {
           <span className="driver-brand-icon">
             <CarFront size={23} />
           </span>
-          <span>Ride<span>Flow</span></span>
+          <span>
+            Ride<span>Flow</span>
+          </span>
         </a>
 
         <div className="driver-header-right">
@@ -430,7 +427,11 @@ export default function DriverDashboard({ user, onLogout }) {
             <h1>Welcome back, {user?.name?.split(" ")[0] || "Driver"}!</h1>
             <p>Manage your rides and track your driving activity.</p>
 
-            <div className={`driver-availability ${isOnline ? "is-online" : "is-offline"}`}>
+            <div
+              className={`driver-availability ${
+                isOnline ? "is-online" : "is-offline"
+              }`}
+            >
               <span className="driver-availability-dot" />
               <span>{isOnline ? "You're Online" : "You're Offline"}</span>
             </div>
@@ -438,7 +439,9 @@ export default function DriverDashboard({ user, onLogout }) {
 
           <div className="driver-welcome-actions">
             <button
-              className={`driver-availability-btn ${isOnline ? "online" : "offline"}`}
+              className={`driver-availability-btn ${
+                isOnline ? "online" : "offline"
+              }`}
               onClick={handleAvailabilityToggle}
               disabled={availabilityLoading || loading || actionLoading}
             >
@@ -513,6 +516,15 @@ export default function DriverDashboard({ user, onLogout }) {
             detail="From completed rides"
           />
         </section>
+
+        {trackingRide && (
+          <DriverLocationSharing
+            rideId={trackingRide.rideId ?? trackingRide.id}
+            driverId={driverId}
+            isOnline={isOnline}
+            rideStatus={trackingRide.status}
+          />
+        )}
 
         <section className="driver-workspace">
           <div className="driver-section-heading">

@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import RideLocationPicker from "./components/RideLocationPicker";
+import RiderLiveTracking from "./components/RiderLiveTracking";
 
 const RIDE_API = "http://localhost:8080/api/rides";
 const FARE_API = "http://localhost:8080/api/fares";
@@ -140,7 +141,7 @@ function RiderDashboard({ user, onLogout }) {
 
   const isFetchingRef = useRef(false);
 
-  // Stable callback for map selections.
+  // Receive readable addresses and route details from the map.
   const handleRouteChange = useCallback((route) => {
     setFare(null);
     setError("");
@@ -153,8 +154,15 @@ function RiderDashboard({ user, onLogout }) {
       return;
     }
 
-    setPickupLocation(formatCoordinates(route.pickup));
-    setDropLocation(formatCoordinates(route.destination));
+    setPickupLocation(
+      route.pickupAddress || formatCoordinates(route.pickup)
+    );
+
+    setDropLocation(
+      route.destinationAddress ||
+        formatCoordinates(route.destination)
+    );
+
     setDistanceKm(String(route.distanceKm));
   }, []);
 
@@ -207,7 +215,7 @@ function RiderDashboard({ user, onLogout }) {
     [user?.userId]
   );
 
-  // Initial load and automatic refresh.
+  // Initial load and automatic ride history refresh.
   useEffect(() => {
     fetchRides();
 
@@ -245,9 +253,7 @@ function RiderDashboard({ user, onLogout }) {
     }
 
     if (pickupLocation === dropLocation) {
-      setError(
-        "Pickup and destination cannot be the same."
-      );
+      setError("Pickup and destination cannot be the same.");
       return;
     }
 
@@ -272,7 +278,7 @@ function RiderDashboard({ user, onLogout }) {
     }
   };
 
-  // Book a ride using selected map coordinates.
+  // Book a ride using readable addresses and calculated distance.
   const handleBookRide = async () => {
     if (!fare) {
       setError("Please calculate the fare before booking.");
@@ -306,13 +312,12 @@ function RiderDashboard({ user, onLogout }) {
           "Your ride has been booked successfully!"
       );
 
-      // Clear the selected journey in the dashboard.
       setPickupLocation("");
       setDropLocation("");
       setDistanceKm("");
       setFare(null);
 
-      // Reset the map markers and route.
+      // Reset map markers, route, and addresses.
       setMapResetKey((previous) => previous + 1);
 
       await fetchRides();
@@ -491,6 +496,12 @@ function RiderDashboard({ user, onLogout }) {
           </article>
         </section>
 
+        {/* Live driver tracking for active rides */}
+        <RiderLiveTracking
+          rides={rides}
+          riderId={user?.userId}
+        />
+
         <div className="rider-content-grid">
           <section className="booking-card">
             <div className="rider-card-heading">
@@ -633,8 +644,9 @@ function RiderDashboard({ user, onLogout }) {
 
             <p className="fare-disclaimer">
               Fare is an estimate based on the driving distance
-              calculated from your selected map locations. Pickup
-              and destination are currently saved as map coordinates.
+              calculated from your selected map locations.
+              Readable pickup and destination addresses are saved
+              whenever address lookup is available.
             </p>
           </section>
 
