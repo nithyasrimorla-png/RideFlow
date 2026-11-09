@@ -8,6 +8,8 @@ import com.rideflow.repository.RideRepository;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,7 +18,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/drivers")
-@CrossOrigin(origins = "*")
+@CrossOrigin(origins = "http://localhost:5173")
 public class DriverController {
 
     private static final List<Ride.RideStatus> ACTIVE_STATUSES =
@@ -36,11 +38,41 @@ public class DriverController {
         this.rideRepository = rideRepository;
     }
 
+    private Long getAuthenticatedUserId(Jwt jwt) {
+        try {
+            return Long.parseLong(jwt.getSubject());
+        } catch (NumberFormatException | NullPointerException exception) {
+            throw new IllegalStateException("Invalid authenticated user ID");
+        }
+    }
+
+    private String getAuthenticatedRole(Jwt jwt) {
+        return jwt.getClaimAsString("role");
+    }
+
+    private boolean isDriver(Jwt jwt) {
+        return "DRIVER".equals(getAuthenticatedRole(jwt));
+    }
+
+    private ResponseEntity<?> forbidden(String message) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Map.of("message", message));
+    }
+
     @PutMapping("/{driverId}/availability")
     @Transactional
     public ResponseEntity<?> updateAvailability(
             @PathVariable Long driverId,
-            @RequestBody Map<String, Boolean> request) {
+            @RequestBody Map<String, Boolean> request,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        if (!isDriver(jwt)) {
+            return forbidden("Only drivers can update availability.");
+        }
+
+        if (!driverId.equals(getAuthenticatedUserId(jwt))) {
+            return forbidden("You can only update your own availability.");
+        }
 
         User driver = userRepository.findByIdForUpdate(driverId)
                 .orElse(null);
@@ -48,11 +80,6 @@ public class DriverController {
         if (driver == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("message", "Driver not found"));
-        }
-
-        if (driver.getRole() != User.Role.DRIVER) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("message", "User is not a driver"));
         }
 
         Boolean available = request.get("available");
@@ -97,18 +124,22 @@ public class DriverController {
 
     @GetMapping("/{driverId}/availability")
     public ResponseEntity<?> getAvailability(
-            @PathVariable Long driverId) {
+            @PathVariable Long driverId,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        if (!isDriver(jwt)) {
+            return forbidden("Only drivers can view driver availability.");
+        }
+
+        if (!driverId.equals(getAuthenticatedUserId(jwt))) {
+            return forbidden("You can only view your own availability.");
+        }
 
         User driver = userRepository.findById(driverId).orElse(null);
 
         if (driver == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("message", "Driver not found"));
-        }
-
-        if (driver.getRole() != User.Role.DRIVER) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("message", "User is not a driver"));
         }
 
         boolean busy = rideRepository.existsByDriverIdAndStatusIn(
@@ -132,7 +163,14 @@ public class DriverController {
     }
 
     @GetMapping("/available")
-    public ResponseEntity<?> getAvailableDrivers() {
+    public ResponseEntity<?> getAvailableDrivers(
+            @AuthenticationPrincipal Jwt jwt) {
+
+        String role = getAuthenticatedRole(jwt);
+
+        if (!"RIDER".equals(role) && !"DRIVER".equals(role)) {
+            return forbidden("You are not authorized to view available drivers.");
+        }
 
         List<User> onlineDrivers = userRepository.findByRoleAndAvailable(
                 User.Role.DRIVER,
@@ -168,18 +206,22 @@ public class DriverController {
 
     @GetMapping("/{driverId}/dashboard")
     public ResponseEntity<?> getDriverDashboard(
-            @PathVariable Long driverId) {
+            @PathVariable Long driverId,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        if (!isDriver(jwt)) {
+            return forbidden("Only drivers can access the driver dashboard.");
+        }
+
+        if (!driverId.equals(getAuthenticatedUserId(jwt))) {
+            return forbidden("You can only access your own dashboard.");
+        }
 
         User driver = userRepository.findById(driverId).orElse(null);
 
         if (driver == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("message", "Driver not found"));
-        }
-
-        if (driver.getRole() != User.Role.DRIVER) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("message", "User is not a driver"));
         }
 
         long totalRides = rideRepository.countByDriverId(driverId);
