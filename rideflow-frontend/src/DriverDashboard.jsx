@@ -182,6 +182,7 @@ export default function DriverDashboard({ user, onLogout }) {
     totalEarnings: 0,
   });
 
+  const [workStatus, setWorkStatus] = useState("OFFLINE");
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [availabilityLoading, setAvailabilityLoading] = useState(true);
@@ -234,10 +235,22 @@ export default function DriverDashboard({ user, onLogout }) {
           totalEarnings: Number(stats.totalEarnings) || 0,
         });
 
-        const availability = stats.availability;
+        const online =
+          stats.availability === "ONLINE" ||
+          stats.availability === true;
 
-        setIsOnline(
-          availability === "ONLINE" || availability === true
+        setIsOnline(online);
+
+        const backendWorkStatus = stats.workStatus;
+
+        setWorkStatus(
+          ["AVAILABLE", "BUSY", "OFFLINE"].includes(backendWorkStatus)
+            ? backendWorkStatus
+            : !online
+              ? "OFFLINE"
+              : Number(stats.activeRides) > 0
+                ? "BUSY"
+                : "AVAILABLE"
         );
 
         setError("");
@@ -268,6 +281,11 @@ export default function DriverDashboard({ user, onLogout }) {
   const handleAvailabilityToggle = async () => {
     if (!driverId || availabilityLoading || actionLoading) return;
 
+    if (isOnline && workStatus === "BUSY") {
+      setError("Complete or cancel your active ride before going offline.");
+      return;
+    }
+
     const nextAvailability = !isOnline;
 
     setAvailabilityLoading(true);
@@ -281,10 +299,13 @@ export default function DriverDashboard({ user, onLogout }) {
       );
 
       setIsOnline(Boolean(response.data?.available));
+      setWorkStatus(response.data?.workStatus || (
+        nextAvailability ? "AVAILABLE" : "OFFLINE"
+      ));
 
       setSuccess(
         nextAvailability
-          ? "You're online! You can now receive ride requests."
+          ? "You're online and ready to receive ride requests!"
           : "You're offline. You won't receive new ride requests."
       );
 
@@ -295,6 +316,7 @@ export default function DriverDashboard({ user, onLogout }) {
       await fetchDashboardData();
     } catch (requestError) {
       setError(getErrorMessage(requestError));
+      await fetchDashboardData({ silent: true });
     } finally {
       setAvailabilityLoading(false);
     }
@@ -305,6 +327,11 @@ export default function DriverDashboard({ user, onLogout }) {
 
     if (!isOnline) {
       setError("Go online before accepting a ride.");
+      return;
+    }
+
+    if (workStatus === "BUSY") {
+      setError("You already have an active ride. Complete it first.");
       return;
     }
 
@@ -321,6 +348,7 @@ export default function DriverDashboard({ user, onLogout }) {
       await fetchDashboardData();
     } catch (requestError) {
       setError(getErrorMessage(requestError));
+      await fetchDashboardData({ silent: true });
     } finally {
       setActionLoading(false);
     }
@@ -364,13 +392,12 @@ export default function DriverDashboard({ user, onLogout }) {
     (ride) => ride.status === "COMPLETED"
   );
 
-  // The backend stores one latest location per driver.
-  // Use one GPS watcher for the driver's active rides.
+  // One GPS watcher for the driver's active rides.
   const trackingRide = acceptedRides[0] || ongoingRides[0];
 
   const displayedRides =
     activeTab === "available"
-      ? isOnline
+      ? workStatus === "AVAILABLE"
         ? availableRides
         : []
       : activeTab === "accepted"
@@ -384,6 +411,12 @@ export default function DriverDashboard({ user, onLogout }) {
     accepted: "Accepted rides",
     ongoing: "Ongoing rides",
     completed: "Completed rides",
+  };
+
+  const statusLabel = {
+    AVAILABLE: "AVAILABLE",
+    BUSY: "BUSY",
+    OFFLINE: "OFFLINE",
   };
 
   return (
@@ -429,11 +462,21 @@ export default function DriverDashboard({ user, onLogout }) {
 
             <div
               className={`driver-availability ${
-                isOnline ? "is-online" : "is-offline"
+                workStatus === "AVAILABLE"
+                  ? "is-online"
+                  : workStatus === "BUSY"
+                    ? "is-busy"
+                    : "is-offline"
               }`}
             >
               <span className="driver-availability-dot" />
-              <span>{isOnline ? "You're Online" : "You're Offline"}</span>
+              <span>
+                {workStatus === "AVAILABLE"
+                  ? "You're Available"
+                  : workStatus === "BUSY"
+                    ? "You're Busy — Active Ride"
+                    : "You're Offline"}
+              </span>
             </div>
           </div>
 
@@ -443,7 +486,17 @@ export default function DriverDashboard({ user, onLogout }) {
                 isOnline ? "online" : "offline"
               }`}
               onClick={handleAvailabilityToggle}
-              disabled={availabilityLoading || loading || actionLoading}
+              disabled={
+                availabilityLoading ||
+                loading ||
+                actionLoading ||
+                (isOnline && workStatus === "BUSY")
+              }
+              title={
+                workStatus === "BUSY"
+                  ? "Complete or cancel your active ride before going offline"
+                  : ""
+              }
             >
               {availabilityLoading ? (
                 <LoaderCircle size={17} className="driver-spin" />
@@ -453,9 +506,11 @@ export default function DriverDashboard({ user, onLogout }) {
 
               {availabilityLoading
                 ? "Updating..."
-                : isOnline
-                  ? "Go Offline"
-                  : "Go Online"}
+                : workStatus === "BUSY"
+                  ? "Busy on Active Ride"
+                  : isOnline
+                    ? "Go Offline"
+                    : "Go Online"}
             </button>
 
             <button
@@ -545,7 +600,7 @@ export default function DriverDashboard({ user, onLogout }) {
               onClick={() => setActiveTab("available")}
             >
               Available
-              <span>{isOnline ? availableRides.length : 0}</span>
+              <span>{workStatus === "AVAILABLE" ? availableRides.length : 0}</span>
             </button>
 
             <button
@@ -587,7 +642,7 @@ export default function DriverDashboard({ user, onLogout }) {
               <h3>Loading your rides...</h3>
               <p>Please wait while we fetch the latest information.</p>
             </div>
-          ) : activeTab === "available" && !isOnline ? (
+          ) : activeTab === "available" && workStatus === "OFFLINE" ? (
             <div className="driver-empty-state">
               <div className="driver-empty-icon">
                 <Power size={27} />
@@ -602,6 +657,25 @@ export default function DriverDashboard({ user, onLogout }) {
               >
                 <Power size={16} />
                 Go Online
+              </button>
+            </div>
+          ) : activeTab === "available" && workStatus === "BUSY" ? (
+            <div className="driver-empty-state">
+              <div className="driver-empty-icon">
+                <Clock3 size={27} />
+              </div>
+              <h3>You're handling an active ride</h3>
+              <p>
+                Complete or cancel your current active ride before accepting
+                another request.
+              </p>
+              <button
+                className="driver-empty-refresh"
+                onClick={() =>
+                  setActiveTab(ongoingRides.length > 0 ? "ongoing" : "accepted")
+                }
+              >
+                View active ride
               </button>
             </div>
           ) : displayedRides.length === 0 ? (
