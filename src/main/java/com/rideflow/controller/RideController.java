@@ -9,6 +9,8 @@ import com.rideflow.service.FareService;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,7 +19,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/rides")
-@CrossOrigin(origins = "*")
+@CrossOrigin(origins = "http://localhost:5173")
 public class RideController {
 
     private static final List<Ride.RideStatus> ACTIVE_STATUSES =
@@ -40,9 +42,33 @@ public class RideController {
         this.fareService = fareService;
     }
 
+    // Extract authenticated user ID from JWT
+    private Long getAuthenticatedUserId(Jwt jwt) {
+        try {
+            return Long.parseLong(jwt.getSubject());
+        } catch (NumberFormatException | NullPointerException e) {
+            return null;
+        }
+    }
+
+    // Extract authenticated user role from JWT
+    private String getAuthenticatedRole(Jwt jwt) {
+        return jwt.getClaimAsString("role");
+    }
+
+    // Book a ride - RIDER only
     @PostMapping("/book")
     public ResponseEntity<?> bookRide(
+            @AuthenticationPrincipal Jwt jwt,
             @RequestBody Map<String, Object> request) {
+
+        Long authenticatedUserId = getAuthenticatedUserId(jwt);
+
+        if (authenticatedUserId == null
+                || !"RIDER".equals(getAuthenticatedRole(jwt))) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("message", "Only riders can book rides"));
+        }
 
         if (request.get("riderId") == null
                 || request.get("pickupLocation") == null
@@ -60,6 +86,15 @@ public class RideController {
             Long riderId = Long.parseLong(
                     request.get("riderId").toString()
             );
+
+            // Prevent booking on behalf of another rider
+            if (!authenticatedUserId.equals(riderId)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(Map.of(
+                                "message",
+                                "You can only book rides for your own account"
+                        ));
+            }
 
             String pickupLocation =
                     request.get("pickupLocation").toString().trim();
@@ -81,17 +116,14 @@ public class RideController {
                         ));
             }
 
-            User rider = userRepository.findById(riderId)
+            User rider = userRepository.findById(authenticatedUserId)
                     .orElse(null);
 
             if (rider == null
                     || rider.getRole() != User.Role.RIDER) {
 
-                return ResponseEntity.badRequest()
-                        .body(Map.of(
-                                "message",
-                                "Valid rider account not found"
-                        ));
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(Map.of("message", "Valid rider account not found"));
             }
 
             Map<String, Object> fareDetails =
@@ -135,11 +167,26 @@ public class RideController {
         }
     }
 
+    // Rider history - account owner only
     @GetMapping("/rider/{riderId}")
     public ResponseEntity<?> getRiderHistory(
+            @AuthenticationPrincipal Jwt jwt,
             @PathVariable Long riderId) {
 
-        User rider = userRepository.findById(riderId)
+        Long authenticatedUserId = getAuthenticatedUserId(jwt);
+
+        if (!"RIDER".equals(getAuthenticatedRole(jwt))
+                || authenticatedUserId == null
+                || !authenticatedUserId.equals(riderId)) {
+
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of(
+                            "message",
+                            "You can only access your own ride history"
+                    ));
+        }
+
+        User rider = userRepository.findById(authenticatedUserId)
                 .orElse(null);
 
         if (rider == null
@@ -150,7 +197,7 @@ public class RideController {
         }
 
         List<Map<String, Object>> history =
-                rideRepository.findByRiderId(riderId)
+                rideRepository.findByRiderId(authenticatedUserId)
                         .stream()
                         .<Map<String, Object>>map(this::convertRideToResponse)
                         .toList();
@@ -158,11 +205,26 @@ public class RideController {
         return ResponseEntity.ok(history);
     }
 
+    // Driver history - account owner only
     @GetMapping("/driver/{driverId}")
     public ResponseEntity<?> getDriverHistory(
+            @AuthenticationPrincipal Jwt jwt,
             @PathVariable Long driverId) {
 
-        User driver = userRepository.findById(driverId)
+        Long authenticatedUserId = getAuthenticatedUserId(jwt);
+
+        if (!"DRIVER".equals(getAuthenticatedRole(jwt))
+                || authenticatedUserId == null
+                || !authenticatedUserId.equals(driverId)) {
+
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of(
+                            "message",
+                            "You can only access your own driver history"
+                    ));
+        }
+
+        User driver = userRepository.findById(authenticatedUserId)
                 .orElse(null);
 
         if (driver == null
@@ -173,7 +235,7 @@ public class RideController {
         }
 
         List<Map<String, Object>> history =
-                rideRepository.findByDriverId(driverId)
+                rideRepository.findByDriverId(authenticatedUserId)
                         .stream()
                         .<Map<String, Object>>map(this::convertRideToResponse)
                         .toList();
@@ -181,11 +243,26 @@ public class RideController {
         return ResponseEntity.ok(history);
     }
 
+    // Available rides - DRIVER only
     @GetMapping("/available/{driverId}")
     public ResponseEntity<?> getAvailableRides(
+            @AuthenticationPrincipal Jwt jwt,
             @PathVariable Long driverId) {
 
-        User driver = userRepository.findById(driverId)
+        Long authenticatedUserId = getAuthenticatedUserId(jwt);
+
+        if (!"DRIVER".equals(getAuthenticatedRole(jwt))
+                || authenticatedUserId == null
+                || !authenticatedUserId.equals(driverId)) {
+
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of(
+                            "message",
+                            "Only drivers can access their available rides"
+                    ));
+        }
+
+        User driver = userRepository.findById(authenticatedUserId)
                 .orElse(null);
 
         if (driver == null
@@ -196,7 +273,7 @@ public class RideController {
         }
 
         boolean busy = rideRepository.existsByDriverIdAndStatusIn(
-                driverId,
+                authenticatedUserId,
                 ACTIVE_STATUSES
         );
 
@@ -214,16 +291,31 @@ public class RideController {
         return ResponseEntity.ok(availableRides);
     }
 
+    // Accept ride - authenticated DRIVER only
     @PutMapping("/{rideId}/accept/{driverId}")
     @Transactional
     public ResponseEntity<?> acceptRide(
+            @AuthenticationPrincipal Jwt jwt,
             @PathVariable Long rideId,
             @PathVariable Long driverId) {
 
-        // Lock this driver's database row to serialize
-        // simultaneous ride acceptance requests.
-        User driver = userRepository.findByIdForUpdate(driverId)
-                .orElse(null);
+        Long authenticatedUserId = getAuthenticatedUserId(jwt);
+
+        if (!"DRIVER".equals(getAuthenticatedRole(jwt))
+                || authenticatedUserId == null
+                || !authenticatedUserId.equals(driverId)) {
+
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of(
+                            "message",
+                            "You can only accept rides using your own driver account"
+                    ));
+        }
+
+        // Lock authenticated driver's database row
+        User driver = userRepository.findByIdForUpdate(
+                authenticatedUserId
+        ).orElse(null);
 
         if (driver == null
                 || driver.getRole() != User.Role.DRIVER) {
@@ -242,7 +334,7 @@ public class RideController {
 
         boolean alreadyBusy =
                 rideRepository.existsByDriverIdAndStatusIn(
-                        driverId,
+                        authenticatedUserId,
                         ACTIVE_STATUSES
                 );
 
@@ -267,7 +359,7 @@ public class RideController {
         int updatedRows = rideRepository.assignDriverIfAvailable(
                 rideId,
                 driver,
-                driverId,
+                authenticatedUserId,
                 Ride.RideStatus.REQUESTED,
                 Ride.RideStatus.ACCEPTED
         );
@@ -289,11 +381,26 @@ public class RideController {
         ));
     }
 
+    // Update ride status - assigned DRIVER only
     @PutMapping("/{rideId}/status/{driverId}")
     public ResponseEntity<?> updateRideStatus(
+            @AuthenticationPrincipal Jwt jwt,
             @PathVariable Long rideId,
             @PathVariable Long driverId,
             @RequestBody Map<String, String> request) {
+
+        Long authenticatedUserId = getAuthenticatedUserId(jwt);
+
+        if (!"DRIVER".equals(getAuthenticatedRole(jwt))
+                || authenticatedUserId == null
+                || !authenticatedUserId.equals(driverId)) {
+
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of(
+                            "message",
+                            "Only the authenticated driver can update ride status"
+                    ));
+        }
 
         Ride ride = rideRepository.findById(rideId)
                 .orElse(null);
@@ -303,7 +410,7 @@ public class RideController {
                     .body(Map.of("message", "Ride not found"));
         }
 
-        User driver = userRepository.findById(driverId)
+        User driver = userRepository.findById(authenticatedUserId)
                 .orElse(null);
 
         if (driver == null
@@ -314,7 +421,7 @@ public class RideController {
         }
 
         if (ride.getDriver() == null
-                || !ride.getDriver().getId().equals(driverId)) {
+                || !ride.getDriver().getId().equals(authenticatedUserId)) {
 
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of(
@@ -354,7 +461,7 @@ public class RideController {
 
         boolean stillBusy =
                 rideRepository.existsByDriverIdAndStatusIn(
-                        driverId,
+                        authenticatedUserId,
                         ACTIVE_STATUSES
                 );
 
@@ -370,10 +477,32 @@ public class RideController {
         ));
     }
 
+    // Cancel ride - owning RIDER or assigned DRIVER only
     @PutMapping("/{rideId}/cancel/{userId}")
     public ResponseEntity<?> cancelRide(
+            @AuthenticationPrincipal Jwt jwt,
             @PathVariable Long rideId,
             @PathVariable Long userId) {
+
+        Long authenticatedUserId = getAuthenticatedUserId(jwt);
+        String authenticatedRole = getAuthenticatedRole(jwt);
+
+        if (authenticatedUserId == null
+                || !authenticatedUserId.equals(userId)) {
+
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of(
+                            "message",
+                            "You can only cancel rides using your own account"
+                    ));
+        }
+
+        if (!"RIDER".equals(authenticatedRole)
+                && !"DRIVER".equals(authenticatedRole)) {
+
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("message", "Invalid user role"));
+        }
 
         Ride ride = rideRepository.findById(rideId)
                 .orElse(null);
@@ -383,7 +512,7 @@ public class RideController {
                     .body(Map.of("message", "Ride not found"));
         }
 
-        User user = userRepository.findById(userId)
+        User user = userRepository.findById(authenticatedUserId)
                 .orElse(null);
 
         if (user == null) {
@@ -393,12 +522,12 @@ public class RideController {
 
         boolean isRider =
                 user.getRole() == User.Role.RIDER
-                && ride.getRider().getId().equals(userId);
+                && ride.getRider().getId().equals(authenticatedUserId);
 
         boolean isDriver =
                 user.getRole() == User.Role.DRIVER
                 && ride.getDriver() != null
-                && ride.getDriver().getId().equals(userId);
+                && ride.getDriver().getId().equals(authenticatedUserId);
 
         if (!isRider && !isDriver) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
