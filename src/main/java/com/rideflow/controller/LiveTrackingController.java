@@ -1,3 +1,4 @@
+
 package com.rideflow.controller;
 
 import com.rideflow.entity.DriverLocation;
@@ -9,13 +10,15 @@ import com.rideflow.repository.UserRepository;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/tracking")
-@CrossOrigin(origins = "*")
+@CrossOrigin(origins = "http://localhost:5173")
 public class LiveTrackingController {
 
     private final DriverLocationRepository locationRepository;
@@ -32,11 +35,39 @@ public class LiveTrackingController {
         this.userRepository = userRepository;
     }
 
+    private Long getAuthenticatedUserId(Jwt jwt) {
+        try {
+            return Long.parseLong(jwt.getSubject());
+        } catch (NumberFormatException | NullPointerException exception) {
+            throw new IllegalStateException("Invalid authenticated user ID");
+        }
+    }
+
+    private String getAuthenticatedRole(Jwt jwt) {
+        return jwt.getClaimAsString("role");
+    }
+
+    private ResponseEntity<?> forbidden(String message) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Map.of("message", message));
+    }
+
     @PostMapping("/rides/{rideId}/drivers/{driverId}/location")
     public ResponseEntity<?> updateDriverLocation(
             @PathVariable Long rideId,
             @PathVariable Long driverId,
-            @RequestBody Map<String, Object> request) {
+            @RequestBody Map<String, Object> request,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        // Only authenticated drivers can share GPS coordinates.
+        if (!"DRIVER".equals(getAuthenticatedRole(jwt))) {
+            return forbidden("Only drivers can share their location.");
+        }
+
+        // A driver cannot send GPS coordinates using another driver's ID.
+        if (!driverId.equals(getAuthenticatedUserId(jwt))) {
+            return forbidden("You can only share your own location.");
+        }
 
         Object latitudeValue = request.get("latitude");
         Object longitudeValue = request.get("longitude");
@@ -45,8 +76,10 @@ public class LiveTrackingController {
                 || !(longitudeValue instanceof Number)) {
 
             return ResponseEntity.badRequest()
-                    .body(Map.of("message",
-                            "Latitude and longitude are required"));
+                    .body(Map.of(
+                            "message",
+                            "Latitude and longitude are required"
+                    ));
         }
 
         double latitude = ((Number) latitudeValue).doubleValue();
@@ -58,8 +91,7 @@ public class LiveTrackingController {
                 || longitude < -180 || longitude > 180) {
 
             return ResponseEntity.badRequest()
-                    .body(Map.of("message",
-                            "Invalid GPS coordinates"));
+                    .body(Map.of("message", "Invalid GPS coordinates"));
         }
 
         User driver = userRepository.findById(driverId)
@@ -72,8 +104,10 @@ public class LiveTrackingController {
 
         if (!driver.isAvailable()) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(Map.of("message",
-                            "Go online to share your location"));
+                    .body(Map.of(
+                            "message",
+                            "Go online to share your location"
+                    ));
         }
 
         Ride ride = rideRepository.findById(rideId)
@@ -87,17 +121,17 @@ public class LiveTrackingController {
         if (ride.getDriver() == null
                 || !ride.getDriver().getId().equals(driverId)) {
 
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("message",
-                            "This ride is not assigned to you"));
+            return forbidden("This ride is not assigned to you.");
         }
 
         if (ride.getStatus() != Ride.RideStatus.ACCEPTED
                 && ride.getStatus() != Ride.RideStatus.ONGOING) {
 
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(Map.of("message",
-                            "Location sharing is unavailable for this ride"));
+                    .body(Map.of(
+                            "message",
+                            "Location sharing is unavailable for this ride"
+                    ));
         }
 
         DriverLocation location = locationRepository
@@ -124,7 +158,18 @@ public class LiveTrackingController {
     @GetMapping("/rides/{rideId}/riders/{riderId}/driver-location")
     public ResponseEntity<?> getDriverLocation(
             @PathVariable Long rideId,
-            @PathVariable Long riderId) {
+            @PathVariable Long riderId,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        // Only authenticated riders can retrieve live driver locations.
+        if (!"RIDER".equals(getAuthenticatedRole(jwt))) {
+            return forbidden("Only riders can access live ride tracking.");
+        }
+
+        // A rider cannot use another rider's ID to retrieve tracking data.
+        if (!riderId.equals(getAuthenticatedUserId(jwt))) {
+            return forbidden("You can only track your own rides.");
+        }
 
         Ride ride = rideRepository.findById(rideId)
                 .orElse(null);
@@ -137,23 +182,25 @@ public class LiveTrackingController {
         if (ride.getRider() == null
                 || !ride.getRider().getId().equals(riderId)) {
 
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("message",
-                            "You are not authorized to track this ride"));
+            return forbidden("You are not authorized to track this ride.");
         }
 
         if (ride.getStatus() != Ride.RideStatus.ACCEPTED
                 && ride.getStatus() != Ride.RideStatus.ONGOING) {
 
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(Map.of("message",
-                            "Live tracking is unavailable for this ride"));
+                    .body(Map.of(
+                            "message",
+                            "Live tracking is unavailable for this ride"
+                    ));
         }
 
         if (ride.getDriver() == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("message",
-                            "No driver assigned to this ride"));
+                    .body(Map.of(
+                            "message",
+                            "No driver assigned to this ride"
+                    ));
         }
 
         Long driverId = ride.getDriver().getId();
@@ -164,8 +211,10 @@ public class LiveTrackingController {
 
         if (location == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("message",
-                            "Driver location is not available yet"));
+                    .body(Map.of(
+                            "message",
+                            "Driver location is not available yet"
+                    ));
         }
 
         return ResponseEntity.ok(Map.of(

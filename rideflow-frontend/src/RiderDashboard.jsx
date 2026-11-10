@@ -1,6 +1,5 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import axios from "axios";
 import {
   CarFront,
   MapPin,
@@ -19,11 +18,12 @@ import {
   XCircle,
 } from "lucide-react";
 
+import api from "./api/axiosInstance";
 import RideLocationPicker from "./components/RideLocationPicker";
 import RiderLiveTracking from "./components/RiderLiveTracking";
 
-const RIDE_API = "http://localhost:8080/api/rides";
-const FARE_API = "http://localhost:8080/api/fares";
+const RIDE_API = "/rides";
+const FARE_API = "/fares";
 const REFRESH_INTERVAL = 15000;
 
 const RIDE_STEPS = [
@@ -187,7 +187,7 @@ function RiderDashboard({ user, onLogout }) {
       }
 
       try {
-        const response = await axios.get(
+        const response = await api.get(
           `${RIDE_API}/rider/${user.userId}`
         );
 
@@ -260,7 +260,7 @@ function RiderDashboard({ user, onLogout }) {
     setLoadingFare(true);
 
     try {
-      const response = await axios.post(
+      const response = await api.post(
         `${FARE_API}/calculate`,
         { distanceKm: distance }
       );
@@ -297,7 +297,7 @@ function RiderDashboard({ user, onLogout }) {
     setSuccess("");
 
     try {
-      const response = await axios.post(
+      const response = await api.post(
         `${RIDE_API}/book`,
         {
           riderId: user.userId,
@@ -355,7 +355,7 @@ function RiderDashboard({ user, onLogout }) {
     setSuccess("");
 
     try {
-      const response = await axios.put(
+      const response = await api.put(
         `${RIDE_API}/${ride.rideId}/cancel/${user.userId}`
       );
 

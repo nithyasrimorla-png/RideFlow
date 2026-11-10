@@ -1,6 +1,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import axios from "axios";
+import api from "./api/axiosInstance";
 import DriverLocationSharing from "./components/DriverLocationSharing";
 import {
   CarFront,
@@ -19,8 +19,8 @@ import {
   Power,
 } from "lucide-react";
 
-const RIDE_API = "http://localhost:8080/api/rides";
-const DRIVER_API = "http://localhost:8080/api/drivers";
+const RIDE_API = "/rides";
+const DRIVER_API = "/drivers";
 const REFRESH_INTERVAL = 15000;
 
 function getErrorMessage(error) {
@@ -197,7 +197,9 @@ export default function DriverDashboard({ user, onLogout }) {
   const fetchDashboardData = useCallback(
     async ({ silent = false } = {}) => {
       if (!driverId) {
-        setError("Driver account information is missing. Please log in again.");
+        setError(
+          "Driver account information is missing. Please log in again."
+        );
         setLoading(false);
         setAvailabilityLoading(false);
         return;
@@ -218,9 +220,9 @@ export default function DriverDashboard({ user, onLogout }) {
           myRidesResponse,
           dashboardResponse,
         ] = await Promise.all([
-          axios.get(`${RIDE_API}/available/${driverId}`),
-          axios.get(`${RIDE_API}/driver/${driverId}`),
-          axios.get(`${DRIVER_API}/${driverId}/dashboard`),
+          api.get(`${RIDE_API}/available/${driverId}`),
+          api.get(`${RIDE_API}/driver/${driverId}`),
+          api.get(`${DRIVER_API}/${driverId}/dashboard`),
         ]);
 
         setAvailableRides(extractRides(availableResponse.data));
@@ -293,15 +295,16 @@ export default function DriverDashboard({ user, onLogout }) {
     setSuccess("");
 
     try {
-      const response = await axios.put(
+      const response = await api.put(
         `${DRIVER_API}/${driverId}/availability`,
         { available: nextAvailability }
       );
 
       setIsOnline(Boolean(response.data?.available));
-      setWorkStatus(response.data?.workStatus || (
-        nextAvailability ? "AVAILABLE" : "OFFLINE"
-      ));
+      setWorkStatus(
+        response.data?.workStatus ||
+          (nextAvailability ? "AVAILABLE" : "OFFLINE")
+      );
 
       setSuccess(
         nextAvailability
@@ -340,7 +343,7 @@ export default function DriverDashboard({ user, onLogout }) {
     setSuccess("");
 
     try {
-      await axios.put(`${RIDE_API}/${rideId}/accept/${driverId}`);
+      await api.put(`${RIDE_API}/${rideId}/accept/${driverId}`);
 
       setSuccess("Ride accepted successfully!");
       setActiveTab("accepted");
@@ -362,7 +365,7 @@ export default function DriverDashboard({ user, onLogout }) {
     setSuccess("");
 
     try {
-      await axios.put(`${RIDE_API}/${rideId}/status/${driverId}`, {
+      await api.put(`${RIDE_API}/${rideId}/status/${driverId}`, {
         status,
       });
 
@@ -413,12 +416,6 @@ export default function DriverDashboard({ user, onLogout }) {
     completed: "Completed rides",
   };
 
-  const statusLabel = {
-    AVAILABLE: "AVAILABLE",
-    BUSY: "BUSY",
-    OFFLINE: "OFFLINE",
-  };
-
   return (
     <div className="driver-dashboard">
       <header className="driver-header">
@@ -457,7 +454,9 @@ export default function DriverDashboard({ user, onLogout }) {
         <section className="driver-welcome">
           <div>
             <span className="driver-eyebrow">DRIVER WORKSPACE</span>
-            <h1>Welcome back, {user?.name?.split(" ")[0] || "Driver"}!</h1>
+            <h1>
+              Welcome back, {user?.name?.split(" ")[0] || "Driver"}!
+            </h1>
             <p>Manage your rides and track your driving activity.</p>
 
             <div
@@ -600,7 +599,9 @@ export default function DriverDashboard({ user, onLogout }) {
               onClick={() => setActiveTab("available")}
             >
               Available
-              <span>{workStatus === "AVAILABLE" ? availableRides.length : 0}</span>
+              <span>
+                {workStatus === "AVAILABLE" ? availableRides.length : 0}
+              </span>
             </button>
 
             <button
@@ -672,7 +673,9 @@ export default function DriverDashboard({ user, onLogout }) {
               <button
                 className="driver-empty-refresh"
                 onClick={() =>
-                  setActiveTab(ongoingRides.length > 0 ? "ongoing" : "accepted")
+                  setActiveTab(
+                    ongoingRides.length > 0 ? "ongoing" : "accepted"
+                  )
                 }
               >
                 View active ride

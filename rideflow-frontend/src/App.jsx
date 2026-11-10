@@ -1,6 +1,7 @@
 
-import { useState } from "react";
-import axios from "axios";
+import { useEffect, useState } from "react";
+import api from "./api/axiosInstance";
+
 import {
   ArrowRight,
   CarFront,
@@ -18,8 +19,9 @@ import RiderDashboard from "./RiderDashboard";
 import DriverDashboard from "./DriverDashboard";
 import "./App.css";
 
-const USER_API = "http://localhost:8080/api/users";
 const STORAGE_KEY = "rideflowUser";
+
+
 
 function loadStoredUser() {
   try {
@@ -28,9 +30,16 @@ function loadStoredUser() {
     if (!stored) return null;
 
     const parsed = JSON.parse(stored);
+    const validRole = ["RIDER", "DRIVER"].includes(parsed?.role);
 
-    return parsed && parsed.userId ? parsed : null;
+    if (!parsed?.userId || !parsed?.token || !validRole) {
+      localStorage.removeItem(STORAGE_KEY);
+      return null;
+    }
+
+    return parsed;
   } catch {
+    localStorage.removeItem(STORAGE_KEY);
     return null;
   }
 }
@@ -47,15 +56,15 @@ function getErrorMessage(err, fallback) {
   }
 
   if (!err.response) {
-    return "Unable to reach the server. Please check that the backend is running.";
+    return (
+      err.message ||
+      "Unable to reach the server. Please check that the backend is running."
+    );
   }
 
   return fallback;
 }
 
-/* =========================================
-   CAR ILLUSTRATION
-========================================= */
 
 function CarIllustration() {
   return (
@@ -65,7 +74,13 @@ function CarIllustration() {
       role="img"
       aria-label="RideFlow car illustration"
     >
-      <ellipse className="car-shadow" cx="260" cy="262" rx="215" ry="16" />
+      <ellipse
+        className="car-shadow"
+        cx="260"
+        cy="262"
+        rx="215"
+        ry="16"
+      />
 
       <path
         className="car-body"
@@ -112,23 +127,30 @@ function CarIllustration() {
       <g>
         <circle className="car-wheel" cx="148" cy="238" r="38" />
         <circle className="car-hub" cx="148" cy="238" r="16" />
+
         <circle className="car-wheel" cx="384" cy="238" r="38" />
         <circle className="car-hub" cx="384" cy="238" r="16" />
       </g>
 
       <g className="car-pin">
         <circle cx="420" cy="52" r="26" />
-        <circle className="car-pin-dot" cx="420" cy="52" r="9" />
+        <circle
+          className="car-pin-dot"
+          cx="420"
+          cy="52"
+          r="9"
+        />
       </g>
 
-      <path className="car-route" d="M60 270 C140 290 300 292 380 276" />
+      <path
+        className="car-route"
+        d="M60 270 C140 290 300 292 380 276"
+      />
     </svg>
   );
 }
 
-/* =========================================
-   NAVBAR
-========================================= */
+
 
 function Navbar({ onNavigate, onLogin, onRegister }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -207,9 +229,6 @@ function Navbar({ onNavigate, onLogin, onRegister }) {
   );
 }
 
-/* =========================================
-   LANDING PAGE
-========================================= */
 
 function Landing({
   onNavigate,
@@ -227,19 +246,22 @@ function Landing({
       />
 
       <main>
+        {/* Hero */}
         <section id="home" className="rf-hero">
           <div className="rf-container rf-hero-grid">
             <div className="rf-hero-copy">
-              <span className="rf-eyebrow">YOUR CITY, YOUR RIDE</span>
+              <span className="rf-eyebrow">
+                YOUR CITY, YOUR RIDE
+              </span>
 
               <h1>
                 Every journey begins with <em>RideFlow.</em>
               </h1>
 
               <p>
-                Book convenient rides in minutes, see transparent fares before
-                you travel, and get where you are going with a reliable driver
-                you can count on.
+                Book convenient rides in minutes, see transparent fares
+                before you travel, and get where you are going with a
+                reliable driver you can count on.
               </p>
 
               <div className="rf-hero-buttons">
@@ -255,9 +277,9 @@ function Landing({
                 <button
                   type="button"
                   className="rf-btn rf-btn-outline rf-btn-lg"
-                  onClick={onLogin}
+                  onClick={onBecomeDriver}
                 >
-                  Log in
+                  Become a driver
                 </button>
               </div>
             </div>
@@ -270,16 +292,19 @@ function Landing({
           </div>
         </section>
 
+        {/* Features */}
         <section id="features" className="rf-section">
           <div className="rf-container">
             <div className="rf-section-heading">
-              <span className="rf-eyebrow">WHY RIDEFLOW</span>
+              <span className="rf-eyebrow">
+                WHY RIDEFLOW
+              </span>
 
               <h2>Rides built around you.</h2>
 
               <p>
-                Everything you need for a smooth trip, from the moment you book
-                to the moment you arrive.
+                Everything you need for a smooth trip, from the moment
+                you book to the moment you arrive.
               </p>
             </div>
 
@@ -292,8 +317,8 @@ function Landing({
                 <h3>Quick pickups</h3>
 
                 <p>
-                  Request a ride in a few taps and get matched with a nearby
-                  driver so you spend less time waiting.
+                  Request a ride in a few taps and get matched with a
+                  nearby driver so you spend less time waiting.
                 </p>
               </article>
 
@@ -305,8 +330,8 @@ function Landing({
                 <h3>Ride with confidence</h3>
 
                 <p>
-                  Every trip is tracked from request to completion, so you
-                  always know the status of your ride.
+                  Every trip is tracked from request to completion,
+                  so you always know the status of your ride.
                 </p>
               </article>
 
@@ -318,14 +343,16 @@ function Landing({
                 <h3>Transparent fares</h3>
 
                 <p>
-                  See your estimated fare with a clear breakdown before you
-                  confirm. No surprises at the end of the trip.
+                  See your estimated fare with a clear breakdown
+                  before you confirm. No surprises at the end of
+                  the trip.
                 </p>
               </article>
             </div>
           </div>
         </section>
 
+        {/* Driver CTA */}
         <section className="rf-section rf-section-tight">
           <div className="rf-container">
             <div className="rf-driver-cta">
@@ -337,8 +364,9 @@ function Landing({
                 <h2>Drive when you want. Earn on your terms.</h2>
 
                 <p>
-                  Join the RideFlow driver community, accept rides near you and
-                  turn your time on the road into steady income.
+                  Join the RideFlow driver community, accept rides
+                  near you and turn your time on the road into
+                  earnings.
                 </p>
               </div>
 
@@ -354,24 +382,37 @@ function Landing({
           </div>
         </section>
 
+        {/* About */}
         <section id="about" className="rf-section">
           <div className="rf-container rf-about">
             <div className="rf-about-copy">
-              <span className="rf-eyebrow">ABOUT RIDEFLOW</span>
+              <span className="rf-eyebrow">
+                ABOUT RIDEFLOW
+              </span>
 
               <h2>Simple, honest and reliable rides.</h2>
 
               <p>
-                RideFlow connects riders and drivers through a clean, easy to
-                use platform. We believe getting around your city should feel
-                effortless, with clear pricing and dependable service.
+                RideFlow connects riders and drivers through a clean,
+                easy to use platform. We believe getting around your
+                city should feel effortless, with clear pricing and
+                dependable service.
               </p>
 
               <p>
-                Whether you are heading to work, meeting friends or catching a
-                flight, RideFlow keeps every journey straightforward from start
-                to finish.
+                Whether you are heading to work, meeting friends or
+                catching a flight, RideFlow keeps every journey
+                straightforward from start to finish.
               </p>
+
+              <button
+                type="button"
+                className="rf-btn rf-btn-forest"
+                onClick={onRegister}
+              >
+                Join RideFlow
+                <ArrowRight size={18} />
+              </button>
             </div>
 
             <div className="rf-about-stats">
@@ -399,6 +440,7 @@ function Landing({
         </section>
       </main>
 
+      {/* Footer */}
       <footer className="rf-footer">
         <div className="rf-container rf-footer-inner">
           <div className="rf-footer-brand">
@@ -412,21 +454,31 @@ function Landing({
           </div>
 
           <div className="rf-footer-links">
-            <button type="button" onClick={() => onNavigate("home")}>
+            <button
+              type="button"
+              onClick={() => onNavigate("home")}
+            >
               Home
             </button>
 
-            <button type="button" onClick={() => onNavigate("features")}>
+            <button
+              type="button"
+              onClick={() => onNavigate("features")}
+            >
               Features
             </button>
 
-            <button type="button" onClick={() => onNavigate("about")}>
+            <button
+              type="button"
+              onClick={() => onNavigate("about")}
+            >
               About
             </button>
           </div>
 
           <p>
-            &copy; {new Date().getFullYear()} RideFlow. All rights reserved.
+            &copy; {new Date().getFullYear()} RideFlow.
+            All rights reserved.
           </p>
         </div>
       </footer>
@@ -434,9 +486,6 @@ function Landing({
   );
 }
 
-/* =========================================
-   LOGIN AND REGISTRATION
-========================================= */
 
 function AuthScreen({
   mode,
@@ -450,9 +499,14 @@ function AuthScreen({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState(initialRole);
+  const [role, setRole] = useState(initialRole || "RIDER");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    setRole(initialRole || "RIDER");
+    setError("");
+  }, [initialRole, mode]);
 
   const switchMode = (nextMode) => {
     setError("");
@@ -468,50 +522,57 @@ function AuthScreen({
       return;
     }
 
-    if (!email.trim() || !password) {
+    if (!email.trim() || !password.trim()) {
       setError("Please enter your email and password.");
       return;
     }
 
-    if (isRegister && password.length < 6) {
-      setError("Password must be at least 6 characters long.");
+    if (password.length < 6) {
+      setError("Password must contain at least 6 characters.");
       return;
     }
 
     setSubmitting(true);
 
     try {
+
       if (isRegister) {
-        const response = await axios.post(`${USER_API}/register`, {
+        await api.post("/users/register", {
           name: name.trim(),
           email: email.trim(),
           password,
           role,
         });
-
-        const data = response.data || {};
-
-        onAuthenticated({
-          userId: data.userId,
-          name: data.name || name.trim(),
-          email: email.trim(),
-          role: data.role || role,
-        });
-      } else {
-        const response = await axios.post(`${USER_API}/login`, {
-          email: email.trim(),
-          password,
-        });
-
-        const data = response.data || {};
-
-        onAuthenticated({
-          userId: data.userId,
-          name: data.name,
-          email: data.email || email.trim(),
-          role: data.role,
-        });
       }
+
+
+      const response = await api.post("/users/login", {
+        email: email.trim(),
+        password,
+      });
+
+      const data = response.data || {};
+
+      if (!data.userId || !data.token) {
+        throw new Error(
+          "Login response is missing userId or JWT token."
+        );
+      }
+
+      const authenticatedUser = {
+        userId: data.userId,
+        name: data.name || name.trim() || email.trim(),
+        email: data.email || email.trim(),
+        role: data.role || role,
+        token: data.token,
+        tokenType: data.tokenType || "Bearer",
+      };
+
+      if (!["RIDER", "DRIVER"].includes(authenticatedUser.role)) {
+        throw new Error("Invalid user role returned by the server.");
+      }
+
+      onAuthenticated(authenticatedUser);
     } catch (err) {
       setError(
         getErrorMessage(
@@ -555,22 +616,30 @@ function AuthScreen({
           </h2>
 
           <p>
-            Convenient rides, transparent fares and reliable journeys, all in
-            one place.
+            Convenient rides, transparent fares and reliable
+            journeys, all in one place.
           </p>
         </div>
 
-        <small>&copy; {new Date().getFullYear()} RideFlow</small>
+        <small>
+          &copy; {new Date().getFullYear()} RideFlow
+        </small>
       </aside>
 
       <main className="auth-main">
         <div className="auth-card">
-          <button type="button" className="auth-back" onClick={onBack}>
+          <button
+            type="button"
+            className="auth-back"
+            onClick={onBack}
+          >
             &larr; Back to home
           </button>
 
           <h1>
-            {isRegister ? "Create your account" : "Log in to RideFlow"}
+            {isRegister
+              ? "Create your account"
+              : "Log in to RideFlow"}
           </h1>
 
           <p className="auth-subtitle">
@@ -589,7 +658,9 @@ function AuthScreen({
                 type="button"
                 role="radio"
                 aria-checked={role === "RIDER"}
-                className={`role-option ${role === "RIDER" ? "active" : ""}`}
+                className={`role-option ${
+                  role === "RIDER" ? "active" : ""
+                }`}
                 onClick={() => setRole("RIDER")}
               >
                 <strong>Rider</strong>
@@ -600,7 +671,9 @@ function AuthScreen({
                 type="button"
                 role="radio"
                 aria-checked={role === "DRIVER"}
-                className={`role-option ${role === "DRIVER" ? "active" : ""}`}
+                className={`role-option ${
+                  role === "DRIVER" ? "active" : ""
+                }`}
                 onClick={() => setRole("DRIVER")}
               >
                 <strong>Driver</strong>
@@ -609,12 +682,18 @@ function AuthScreen({
             </div>
           )}
 
-          {error && <div className="auth-error">{error}</div>}
+          {error && (
+            <div className="auth-error" role="alert">
+              {error}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} noValidate>
             {isRegister && (
               <>
-                <label htmlFor="authName">Full name</label>
+                <label htmlFor="authName">
+                  Full name
+                </label>
 
                 <div className="auth-input">
                   <User size={18} />
@@ -624,14 +703,19 @@ function AuthScreen({
                     type="text"
                     placeholder="Your full name"
                     value={name}
-                    onChange={(event) => setName(event.target.value)}
+                    onChange={(event) =>
+                      setName(event.target.value)
+                    }
                     autoComplete="name"
+                    required
                   />
                 </div>
               </>
             )}
 
-            <label htmlFor="authEmail">Email</label>
+            <label htmlFor="authEmail">
+              Email
+            </label>
 
             <div className="auth-input">
               <Mail size={18} />
@@ -641,12 +725,17 @@ function AuthScreen({
                 type="email"
                 placeholder="you@example.com"
                 value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                onChange={(event) =>
+                  setEmail(event.target.value)
+                }
                 autoComplete="email"
+                required
               />
             </div>
 
-            <label htmlFor="authPassword">Password</label>
+            <label htmlFor="authPassword">
+              Password
+            </label>
 
             <div className="auth-input">
               <Lock size={18} />
@@ -655,13 +744,20 @@ function AuthScreen({
                 id="authPassword"
                 type="password"
                 placeholder={
-                  isRegister ? "At least 6 characters" : "Your password"
+                  isRegister
+                    ? "At least 6 characters"
+                    : "Your password"
                 }
                 value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                autoComplete={
-                  isRegister ? "new-password" : "current-password"
+                onChange={(event) =>
+                  setPassword(event.target.value)
                 }
+                autoComplete={
+                  isRegister
+                    ? "new-password"
+                    : "current-password"
+                }
+                required
               />
             </div>
 
@@ -689,9 +785,15 @@ function AuthScreen({
 
             <button
               type="button"
-              onClick={() => switchMode(isRegister ? "login" : "register")}
+              onClick={() =>
+                switchMode(
+                  isRegister ? "login" : "register"
+                )
+              }
             >
-              {isRegister ? "Log in" : "Create an account"}
+              {isRegister
+                ? "Log in"
+                : "Create an account"}
             </button>
           </p>
         </div>
@@ -700,15 +802,35 @@ function AuthScreen({
   );
 }
 
-/* =========================================
-   MAIN APP
-========================================= */
-
 function App() {
-  const [user, setUser] = useState(loadStoredUser);
+  const [user, setUser] = useState(() => loadStoredUser());
   const [view, setView] = useState("landing");
   const [authMode, setAuthMode] = useState("login");
   const [authRole, setAuthRole] = useState("RIDER");
+
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setUser(null);
+      setAuthMode("login");
+      setAuthRole("RIDER");
+      setView("auth");
+      window.scrollTo({ top: 0 });
+    };
+
+    window.addEventListener(
+      "rideflow:unauthorized",
+      handleUnauthorized
+    );
+
+    return () => {
+      window.removeEventListener(
+        "rideflow:unauthorized",
+        handleUnauthorized
+      );
+    };
+  }, []);
+
 
   const scrollToSection = (id) => {
     setView("landing");
@@ -717,7 +839,10 @@ function App() {
       const target = document.getElementById(id);
 
       if (id === "home" || !target) {
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        window.scrollTo({
+          top: 0,
+          behavior: "smooth",
+        });
       } else {
         target.scrollIntoView({
           behavior: "smooth",
@@ -727,42 +852,58 @@ function App() {
     }, 0);
   };
 
+
   const openAuth = (mode, role = "RIDER") => {
     setAuthMode(mode);
     setAuthRole(role);
     setView("auth");
+
     window.scrollTo({ top: 0 });
   };
 
+
   const handleAuthenticated = (authUser) => {
-    if (!authUser?.userId) {
+    if (
+      !authUser?.userId ||
+      !authUser?.token ||
+      !["RIDER", "DRIVER"].includes(authUser?.role)
+    ) {
       return;
     }
 
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(authUser)
+      );
     } catch {
-      // Storage may be unavailable; the session still works until refresh.
+      setUser(null);
+      setView("auth");
+      setAuthMode("login");
+      return;
     }
 
     setUser(authUser);
     setView("landing");
+
     window.scrollTo({ top: 0 });
   };
+
 
   const handleLogout = () => {
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch {
-      // Ignore storage errors on logout.
+
     }
 
     setUser(null);
     setView("landing");
+
     window.scrollTo({ top: 0 });
   };
 
-  // Render the correct dashboard based on the authenticated user's role.
+
   if (user) {
     if (user.role === "DRIVER") {
       return (
@@ -792,14 +933,15 @@ function App() {
       />
     );
   }
-
   return (
     <Landing
       onNavigate={scrollToSection}
       onLogin={() => openAuth("login")}
       onRegister={() => openAuth("register")}
       onBookRide={() => openAuth("login", "RIDER")}
-      onBecomeDriver={() => openAuth("register", "DRIVER")}
+      onBecomeDriver={() =>
+        openAuth("register", "DRIVER")
+      }
     />
   );
 }
