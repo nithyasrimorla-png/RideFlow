@@ -1,6 +1,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import axios from "axios";
+import api from "../api/axiosInstance";
 import {
   MapContainer,
   TileLayer,
@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import "leaflet/dist/leaflet.css";
 
-const TRACKING_API = "http://localhost:8080/api/tracking";
 const REFRESH_INTERVAL = 5000;
 
 const driverIcon = L.divIcon({
@@ -127,7 +126,6 @@ function RiderLiveTracking({ rides = [], riderId }) {
 
   const isFetchingRef = useRef(false);
 
-  // Do not depend on driverId being present in ride-history data.
   const activeRides = rides.filter((ride) => {
     const status = String(ride.status || "").toUpperCase();
     const rideId = ride.rideId ?? ride.id;
@@ -161,8 +159,8 @@ function RiderLiveTracking({ rides = [], riderId }) {
 
       const results = await Promise.allSettled(
         currentActiveRides.map(async (rideId) => {
-          const response = await axios.get(
-            `${TRACKING_API}/rides/${rideId}/riders/${riderId}/driver-location`
+          const response = await api.get(
+            `/tracking/rides/${rideId}/riders/${riderId}/driver-location`
           );
 
           return {
@@ -195,6 +193,7 @@ function RiderLiveTracking({ rides = [], riderId }) {
       );
     } catch (error) {
       console.error("Driver location tracking error:", error);
+
       setTrackingError(
         "Unable to retrieve driver locations. Retrying automatically."
       );

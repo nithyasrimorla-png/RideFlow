@@ -1,7 +1,7 @@
 
 import { useEffect, useRef, useState } from "react";
+import api from "../api/axiosInstance";
 
-const TRACKING_API = "http://localhost:8080/api/tracking";
 const LOCATION_UPDATE_INTERVAL = 5000;
 
 export default function DriverLocationSharing({
@@ -12,6 +12,7 @@ export default function DriverLocationSharing({
 }) {
   const [message, setMessage] = useState("Waiting for GPS permission...");
   const [sharing, setSharing] = useState(false);
+
   const lastSentRef = useRef(0);
   const sendingRef = useRef(false);
 
@@ -34,6 +35,9 @@ export default function DriverLocationSharing({
     let active = true;
     let watchId = null;
 
+    lastSentRef.current = 0;
+    sendingRef.current = false;
+
     setSharing(false);
     setMessage("Requesting browser location permission...");
 
@@ -49,38 +53,35 @@ export default function DriverLocationSharing({
       const latitude = position.coords.latitude;
       const longitude = position.coords.longitude;
 
-      lastSentRef.current = now;
       sendingRef.current = true;
 
       try {
-        const response = await fetch(
-          `${TRACKING_API}/rides/${rideId}/drivers/${driverId}/location`,
+        const response = await api.post(
+          `/tracking/rides/${rideId}/drivers/${driverId}/location`,
           {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ latitude, longitude }),
+            latitude,
+            longitude,
           }
         );
 
-        const data = await response.json();
+        if (!active) return;
 
-        if (!response.ok) {
-          throw new Error(
-            data.message || "Unable to update driver location."
-          );
-        }
-
-        if (active) {
-          setSharing(true);
-          setMessage("Your live location is being shared.");
-        }
+        lastSentRef.current = Date.now();
+        setSharing(true);
+        setMessage("Your live location is being shared.");
       } catch (error) {
-        if (active) {
-          setSharing(false);
-          setMessage(error.message || "Location update failed.");
-        }
+        if (!active) return;
+
+        setSharing(false);
+
+        const errorMessage =
+          error.response?.data?.message ||
+          error.response?.data?.error ||
+          error.message ||
+          "Unable to update driver location.";
+
+        setMessage(errorMessage);
+        console.error("RideFlow GPS update failed:", error);
       } finally {
         sendingRef.current = false;
       }
@@ -92,11 +93,15 @@ export default function DriverLocationSharing({
       setSharing(false);
 
       if (error.code === error.PERMISSION_DENIED) {
-        setMessage("Location permission denied. Allow location access in your browser.");
+        setMessage(
+          "Location permission denied. Allow location access in your browser."
+        );
       } else if (error.code === error.POSITION_UNAVAILABLE) {
         setMessage("Your device location is currently unavailable.");
       } else if (error.code === error.TIMEOUT) {
-        setMessage("GPS request timed out. Waiting for another location update...");
+        setMessage(
+          "GPS request timed out. Waiting for another location update..."
+        );
       } else {
         setMessage("Unable to retrieve your current location.");
       }
