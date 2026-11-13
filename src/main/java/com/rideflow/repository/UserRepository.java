@@ -27,4 +27,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByIdForUpdate(
             @Param("driverId") Long driverId
     );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT u FROM User u " +
+            "WHERE u.role = :role " +
+            "AND u.available = true " +
+            "ORDER BY u.id ASC")
+    List<User> findOnlineDriversForUpdate(
+            @Param("role") User.Role role
+    );
 }

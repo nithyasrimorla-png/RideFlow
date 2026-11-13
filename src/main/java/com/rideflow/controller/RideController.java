@@ -5,6 +5,7 @@ import com.rideflow.entity.Ride;
 import com.rideflow.entity.User;
 import com.rideflow.repository.RideRepository;
 import com.rideflow.repository.UserRepository;
+import com.rideflow.service.DriverAssignmentService;
 import com.rideflow.service.FareService;
 
 import org.springframework.http.HttpStatus;
@@ -14,6 +15,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -31,15 +33,18 @@ public class RideController {
     private final RideRepository rideRepository;
     private final UserRepository userRepository;
     private final FareService fareService;
+    private final DriverAssignmentService driverAssignmentService;
 
     public RideController(
             RideRepository rideRepository,
             UserRepository userRepository,
-            FareService fareService) {
+            FareService fareService,
+            DriverAssignmentService driverAssignmentService) {
 
         this.rideRepository = rideRepository;
         this.userRepository = userRepository;
         this.fareService = fareService;
+        this.driverAssignmentService = driverAssignmentService;
     }
 
     // Extract authenticated user ID from JWT
@@ -53,11 +58,12 @@ public class RideController {
 
     // Extract authenticated user role from JWT
     private String getAuthenticatedRole(Jwt jwt) {
-        return jwt.getClaimAsString("role");
+        return jwt != null ? jwt.getClaimAsString("role") : null;
     }
 
-    // Book a ride - RIDER only
+    // Book ride with automatic driver assignment
     @PostMapping("/book")
+    @Transactional
     public ResponseEntity<?> bookRide(
             @AuthenticationPrincipal Jwt jwt,
             @RequestBody Map<String, Object> request) {
@@ -66,6 +72,7 @@ public class RideController {
 
         if (authenticatedUserId == null
                 || !"RIDER".equals(getAuthenticatedRole(jwt))) {
+
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("message", "Only riders can book rides"));
         }
@@ -106,6 +113,14 @@ public class RideController {
                     request.get("distanceKm").toString()
             );
 
+            if (!Double.isFinite(distanceKm) || distanceKm <= 0) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of(
+                                "message",
+                                "Distance must be a valid positive number"
+                        ));
+            }
+
             if (pickupLocation.isBlank()
                     || dropLocation.isBlank()) {
 
@@ -123,7 +138,10 @@ public class RideController {
                     || rider.getRole() != User.Role.RIDER) {
 
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body(Map.of("message", "Valid rider account not found"));
+                        .body(Map.of(
+                                "message",
+                                "Valid rider account not found"
+                        ));
             }
 
             Map<String, Object> fareDetails =
@@ -139,20 +157,43 @@ public class RideController {
             ride.setDropLocation(dropLocation);
             ride.setFare(calculatedFare);
 
+            // Save ride first
             Ride savedRide = rideRepository.save(ride);
 
+            // Automatically assign an available driver
+            User assignedDriver =
+                    driverAssignmentService.assignDriver(savedRide);
+
+            // Build response using HashMap
+            Map<String, Object> response = new HashMap<>();
+
+            response.put("message", "Ride booked successfully");
+            response.put("rideId", savedRide.getId());
+            response.put("riderName", rider.getName());
+
+            response.put(
+                    "driverName",
+                    assignedDriver != null
+                            ? assignedDriver.getName()
+                            : "Not assigned"
+            );
+
+            response.put(
+                    "assignmentMessage",
+                    assignedDriver != null
+                            ? "Driver assigned successfully"
+                            : "No online driver available. Waiting for a driver."
+            );
+
+            response.put("pickupLocation", savedRide.getPickupLocation());
+            response.put("dropLocation", savedRide.getDropLocation());
+            response.put("distanceKm", distanceKm);
+            response.put("fare", savedRide.getFare());
+            response.put("fareBreakdown", fareDetails);
+            response.put("status", savedRide.getStatus().toString());
+
             return ResponseEntity.status(HttpStatus.CREATED)
-                    .body(Map.of(
-                            "message", "Ride booked successfully",
-                            "rideId", savedRide.getId(),
-                            "riderName", rider.getName(),
-                            "pickupLocation", savedRide.getPickupLocation(),
-                            "dropLocation", savedRide.getDropLocation(),
-                            "distanceKm", distanceKm,
-                            "fare", savedRide.getFare(),
-                            "fareBreakdown", fareDetails,
-                            "status", savedRide.getStatus().toString()
-                    ));
+                    .body(response);
 
         } catch (NumberFormatException e) {
             return ResponseEntity.badRequest()
@@ -558,6 +599,7 @@ public class RideController {
         ));
     }
 
+    // Convert ride entity into response
     private Map<String, Object> convertRideToResponse(Ride ride) {
 
         return Map.of(
