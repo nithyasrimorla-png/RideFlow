@@ -1,7 +1,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
+
 import api from "./api/axiosInstance";
+
 import DriverLocationSharing from "./components/DriverLocationSharing";
+
 import {
   CarFront,
   MapPin,
@@ -168,6 +171,119 @@ function RideCard({ ride, type, loading, onAccept, onUpdateStatus }) {
         )}
       </div>
     </article>
+  );
+}
+
+/* Active ride overview */
+
+function ActiveRidePanel({ ride }) {
+  if (!ride) return null;
+
+  const status = ride.status || "ACCEPTED";
+  const rideId = ride.rideId ?? ride.id;
+  const fare = ride.fare ?? ride.totalFare ?? 0;
+  const riderName =
+    ride.riderName || ride.rider?.name || "RideFlow Rider";
+
+  const stages = [
+    "REQUESTED",
+    "ACCEPTED",
+    "ONGOING",
+    "COMPLETED",
+  ];
+
+  const currentStage = stages.indexOf(status);
+
+  return (
+    <section className="driver-active-panel">
+      <div className="driver-active-heading">
+        <div>
+          <span className="driver-eyebrow">CURRENT TRIP</span>
+          <h2>Your active ride</h2>
+          <p>Track your current trip and its progress.</p>
+        </div>
+
+        <span className={`driver-status status-${status.toLowerCase()}`}>
+          {status.replaceAll("_", " ")}
+        </span>
+      </div>
+
+      <div className="driver-active-details">
+        <div className="driver-active-route">
+          <div className="driver-active-location">
+            <span className="driver-active-dot pickup-dot" />
+            <div>
+              <small>PICKUP LOCATION</small>
+              <strong>
+                {ride.pickupLocation || "Pickup unavailable"}
+              </strong>
+            </div>
+          </div>
+
+          <div className="driver-active-route-line" />
+
+          <div className="driver-active-location">
+            <span className="driver-active-dot drop-dot" />
+            <div>
+              <small>DROP LOCATION</small>
+              <strong>
+                {ride.dropLocation || "Drop unavailable"}
+              </strong>
+            </div>
+          </div>
+        </div>
+
+        <div className="driver-active-meta">
+          <div>
+            <small>RIDE ID</small>
+            <strong>#{rideId ?? "N/A"}</strong>
+          </div>
+
+          <div>
+            <small>RIDER</small>
+            <strong>{riderName}</strong>
+          </div>
+
+          <div>
+            <small>FARE</small>
+            <strong>{formatCurrency(fare)}</strong>
+          </div>
+        </div>
+      </div>
+
+      <div className="driver-progress">
+        <h3>Ride progress</h3>
+
+        <div className="driver-progress-track">
+          {stages.map((stage, index) => {
+            const completed = index < currentStage;
+            const current = index === currentStage;
+
+            return (
+              <div
+                key={stage}
+                className={`driver-progress-step ${
+                  completed ? "completed" : ""
+                } ${current ? "current" : ""}`}
+              >
+                <span className="driver-progress-marker">
+                  {completed ? (
+                    <CheckCircle2 size={17} />
+                  ) : (
+                    index + 1
+                  )}
+                </span>
+
+                <span>
+                  {stage.charAt(0) +
+                    stage.slice(1).toLowerCase()}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -395,8 +511,9 @@ export default function DriverDashboard({ user, onLogout }) {
     (ride) => ride.status === "COMPLETED"
   );
 
-  // One GPS watcher for the driver's active rides.
-  const trackingRide = acceptedRides[0] || ongoingRides[0];
+  // Display and track the current active ride.
+  const activeRide = ongoingRides[0] || acceptedRides[0];
+  const trackingRide = activeRide;
 
   const displayedRides =
     activeTab === "available"
@@ -579,6 +696,8 @@ export default function DriverDashboard({ user, onLogout }) {
             rideStatus={trackingRide.status}
           />
         )}
+
+        <ActiveRidePanel ride={activeRide} />
 
         <section className="driver-workspace">
           <div className="driver-section-heading">
