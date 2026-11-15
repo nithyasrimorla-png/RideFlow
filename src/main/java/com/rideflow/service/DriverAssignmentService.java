@@ -60,4 +60,44 @@ public class DriverAssignmentService {
 
         return null;
     }
+
+    @Transactional
+    public Ride assignOldestPendingRide(Long driverId) {
+
+        User driver = userRepository.findByIdForUpdate(driverId)
+                .orElse(null);
+
+        if (driver == null
+                || driver.getRole() != User.Role.DRIVER
+                || !driver.isAvailable()) {
+
+            return null;
+        }
+
+        boolean busy =
+                rideRepository.existsByDriverIdAndStatusIn(
+                        driverId,
+                        ACTIVE_STATUSES
+                );
+
+        if (busy) {
+            return null;
+        }
+
+        Ride pendingRide =
+                rideRepository
+                        .findFirstByStatusAndDriverIsNullOrderByCreatedAtAscIdAsc(
+                                Ride.RideStatus.REQUESTED
+                        )
+                        .orElse(null);
+
+        if (pendingRide == null) {
+            return null;
+        }
+
+        pendingRide.setDriver(driver);
+        pendingRide.setStatus(Ride.RideStatus.ACCEPTED);
+
+        return rideRepository.save(pendingRide);
+    }
 }

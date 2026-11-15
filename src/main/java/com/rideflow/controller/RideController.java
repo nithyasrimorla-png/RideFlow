@@ -47,7 +47,7 @@ public class RideController {
         this.driverAssignmentService = driverAssignmentService;
     }
 
-    // Extract authenticated user ID from JWT
+
     private Long getAuthenticatedUserId(Jwt jwt) {
         try {
             return Long.parseLong(jwt.getSubject());
@@ -56,12 +56,12 @@ public class RideController {
         }
     }
 
-    // Extract authenticated user role from JWT
+
     private String getAuthenticatedRole(Jwt jwt) {
         return jwt != null ? jwt.getClaimAsString("role") : null;
     }
 
-    // Book ride with automatic driver assignment
+
     @PostMapping("/book")
     @Transactional
     public ResponseEntity<?> bookRide(
@@ -94,7 +94,6 @@ public class RideController {
                     request.get("riderId").toString()
             );
 
-            // Prevent booking on behalf of another rider
             if (!authenticatedUserId.equals(riderId)) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
                         .body(Map.of(
@@ -157,14 +156,12 @@ public class RideController {
             ride.setDropLocation(dropLocation);
             ride.setFare(calculatedFare);
 
-            // Save ride first
             Ride savedRide = rideRepository.save(ride);
 
-            // Automatically assign an available driver
+
             User assignedDriver =
                     driverAssignmentService.assignDriver(savedRide);
 
-            // Build response using HashMap
             Map<String, Object> response = new HashMap<>();
 
             response.put("message", "Ride booked successfully");
@@ -208,7 +205,7 @@ public class RideController {
         }
     }
 
-    // Rider history - account owner only
+
     @GetMapping("/rider/{riderId}")
     public ResponseEntity<?> getRiderHistory(
             @AuthenticationPrincipal Jwt jwt,
@@ -246,7 +243,7 @@ public class RideController {
         return ResponseEntity.ok(history);
     }
 
-    // Driver history - account owner only
+
     @GetMapping("/driver/{driverId}")
     public ResponseEntity<?> getDriverHistory(
             @AuthenticationPrincipal Jwt jwt,
@@ -284,7 +281,7 @@ public class RideController {
         return ResponseEntity.ok(history);
     }
 
-    // Available rides - DRIVER only
+
     @GetMapping("/available/{driverId}")
     public ResponseEntity<?> getAvailableRides(
             @AuthenticationPrincipal Jwt jwt,
@@ -332,7 +329,7 @@ public class RideController {
         return ResponseEntity.ok(availableRides);
     }
 
-    // Accept ride - authenticated DRIVER only
+
     @PutMapping("/{rideId}/accept/{driverId}")
     @Transactional
     public ResponseEntity<?> acceptRide(
@@ -353,7 +350,6 @@ public class RideController {
                     ));
         }
 
-        // Lock authenticated driver's database row
         User driver = userRepository.findByIdForUpdate(
                 authenticatedUserId
         ).orElse(null);
@@ -422,8 +418,8 @@ public class RideController {
         ));
     }
 
-    // Update ride status - assigned DRIVER only
     @PutMapping("/{rideId}/status/{driverId}")
+    @Transactional
     public ResponseEntity<?> updateRideStatus(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable Long rideId,
@@ -500,6 +496,14 @@ public class RideController {
 
         Ride updatedRide = rideRepository.save(ride);
 
+
+        Ride nextRide = null;
+
+        if (updatedRide.getStatus() == Ride.RideStatus.COMPLETED) {
+            nextRide = driverAssignmentService
+                    .assignOldestPendingRide(authenticatedUserId);
+        }
+
         boolean stillBusy =
                 rideRepository.existsByDriverIdAndStatusIn(
                         authenticatedUserId,
@@ -510,16 +514,28 @@ public class RideController {
                 ? "OFFLINE"
                 : stillBusy ? "BUSY" : "AVAILABLE";
 
-        return ResponseEntity.ok(Map.of(
-                "message", "Ride status updated successfully",
-                "rideId", updatedRide.getId(),
-                "status", updatedRide.getStatus().toString(),
-                "workStatus", workStatus
-        ));
+        Map<String, Object> response = new HashMap<>();
+
+        response.put("message", "Ride status updated successfully");
+        response.put("rideId", updatedRide.getId());
+        response.put("status", updatedRide.getStatus().toString());
+        response.put("workStatus", workStatus);
+
+        if (nextRide != null) {
+            response.put("nextRideId", nextRide.getId());
+            response.put("nextRideStatus", nextRide.getStatus().toString());
+            response.put(
+                    "message",
+                    "Ride completed successfully. Next waiting ride assigned."
+            );
+        }
+
+        return ResponseEntity.ok(response);
     }
 
-    // Cancel ride - owning RIDER or assigned DRIVER only
+
     @PutMapping("/{rideId}/cancel/{userId}")
+    @Transactional
     public ResponseEntity<?> cancelRide(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable Long rideId,
@@ -588,18 +604,45 @@ public class RideController {
                     ));
         }
 
+
+        Long freedDriverId = null;
+
+        if (ride.getStatus() == Ride.RideStatus.ACCEPTED
+                && ride.getDriver() != null) {
+
+            freedDriverId = ride.getDriver().getId();
+        }
+
         ride.setStatus(Ride.RideStatus.CANCELLED);
 
         Ride cancelledRide = rideRepository.save(ride);
 
-        return ResponseEntity.ok(Map.of(
-                "message", "Ride cancelled successfully",
-                "rideId", cancelledRide.getId(),
-                "status", cancelledRide.getStatus().toString()
-        ));
+
+        Ride nextRide = null;
+
+        if (freedDriverId != null) {
+            nextRide = driverAssignmentService
+                    .assignOldestPendingRide(freedDriverId);
+        }
+
+        Map<String, Object> response = new HashMap<>();
+
+        response.put("message", "Ride cancelled successfully");
+        response.put("rideId", cancelledRide.getId());
+        response.put("status", cancelledRide.getStatus().toString());
+
+        if (nextRide != null) {
+            response.put("nextRideId", nextRide.getId());
+            response.put("nextRideStatus", nextRide.getStatus().toString());
+            response.put(
+                    "assignmentMessage",
+                    "The oldest waiting ride has been assigned to the available driver."
+            );
+        }
+
+        return ResponseEntity.ok(response);
     }
 
-    // Convert ride entity into response
     private Map<String, Object> convertRideToResponse(Ride ride) {
 
         return Map.of(

@@ -5,6 +5,7 @@ import com.rideflow.entity.User;
 import com.rideflow.entity.Ride;
 import com.rideflow.repository.UserRepository;
 import com.rideflow.repository.RideRepository;
+import com.rideflow.service.DriverAssignmentService;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -29,13 +30,16 @@ public class DriverController {
 
     private final UserRepository userRepository;
     private final RideRepository rideRepository;
+    private final DriverAssignmentService driverAssignmentService;
 
     public DriverController(
             UserRepository userRepository,
-            RideRepository rideRepository) {
+            RideRepository rideRepository,
+            DriverAssignmentService driverAssignmentService) {
 
         this.userRepository = userRepository;
         this.rideRepository = rideRepository;
+        this.driverAssignmentService = driverAssignmentService;
     }
 
     private Long getAuthenticatedUserId(Jwt jwt) {
@@ -59,6 +63,7 @@ public class DriverController {
                 .body(Map.of("message", message));
     }
 
+    // Update driver availability and automatically assign pending rides.
     @PutMapping("/{driverId}/availability")
     @Transactional
     public ResponseEntity<?> updateAvailability(
@@ -77,7 +82,9 @@ public class DriverController {
         User driver = userRepository.findByIdForUpdate(driverId)
                 .orElse(null);
 
-        if (driver == null) {
+        if (driver == null
+                || driver.getRole() != User.Role.DRIVER) {
+
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("message", "Driver not found"));
         }
@@ -107,13 +114,39 @@ public class DriverController {
         driver.setAvailable(available);
         userRepository.save(driver);
 
+        // Assign the oldest pending ride when the driver comes online.
+        Ride assignedRide = available
+                ? driverAssignmentService.assignOldestPendingRide(driverId)
+                : null;
+
         String workStatus = !available
                 ? "OFFLINE"
-                : busy ? "BUSY" : "AVAILABLE";
+                : assignedRide != null || busy
+                        ? "BUSY"
+                        : "AVAILABLE";
+
+        String message = assignedRide != null
+                ? "Driver is online and a pending ride has been assigned"
+                : "Driver availability updated successfully";
+
+        if (assignedRide != null) {
+            return ResponseEntity.ok(
+                    Map.of(
+                            "message", message,
+                            "driverId", driver.getId(),
+                            "available", driver.isAvailable(),
+                            "status", "ONLINE",
+                            "workStatus", workStatus,
+                            "assignedRideId", assignedRide.getId(),
+                            "assignedRideStatus",
+                            assignedRide.getStatus().toString()
+                    )
+            );
+        }
 
         return ResponseEntity.ok(
                 Map.of(
-                        "message", "Driver availability updated successfully",
+                        "message", message,
                         "driverId", driver.getId(),
                         "available", driver.isAvailable(),
                         "status", driver.isAvailable() ? "ONLINE" : "OFFLINE",
@@ -122,6 +155,7 @@ public class DriverController {
         );
     }
 
+    // Get authenticated driver's availability.
     @GetMapping("/{driverId}/availability")
     public ResponseEntity<?> getAvailability(
             @PathVariable Long driverId,
@@ -137,7 +171,9 @@ public class DriverController {
 
         User driver = userRepository.findById(driverId).orElse(null);
 
-        if (driver == null) {
+        if (driver == null
+                || driver.getRole() != User.Role.DRIVER) {
+
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("message", "Driver not found"));
         }
@@ -162,6 +198,7 @@ public class DriverController {
         );
     }
 
+    // Get available online drivers.
     @GetMapping("/available")
     public ResponseEntity<?> getAvailableDrivers(
             @AuthenticationPrincipal Jwt jwt) {
@@ -204,6 +241,7 @@ public class DriverController {
         );
     }
 
+    // Get authenticated driver's dashboard.
     @GetMapping("/{driverId}/dashboard")
     public ResponseEntity<?> getDriverDashboard(
             @PathVariable Long driverId,
@@ -219,7 +257,9 @@ public class DriverController {
 
         User driver = userRepository.findById(driverId).orElse(null);
 
-        if (driver == null) {
+        if (driver == null
+                || driver.getRole() != User.Role.DRIVER) {
+
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("message", "Driver not found"));
         }
