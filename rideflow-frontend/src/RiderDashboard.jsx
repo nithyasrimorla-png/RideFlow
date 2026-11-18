@@ -21,6 +21,7 @@ import {
 import api from "./api/axiosInstance";
 import RideLocationPicker from "./components/RideLocationPicker";
 import RiderLiveTracking from "./components/RiderLiveTracking";
+import RideReviewSection from "./components/RideReviewSection";
 
 const RIDE_API = "/rides";
 const FARE_API = "/fares";
@@ -747,6 +748,14 @@ function RiderDashboard({ user, onLogout }) {
                       </div>
 
                       <RideProgress status={ride.status} />
+
+                      {/* Rating and feedback for completed rides */}
+                      {ride.status === "COMPLETED" && (
+                        <RideReviewSection
+                          rideId={ride.rideId}
+                          driverName={ride.driverName}
+                        />
+                      )}
 
                       {canCancel && (
                         <button

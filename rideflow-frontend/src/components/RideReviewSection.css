@@ -1,0 +1,239 @@
+
+/* Ride Review Section */
+
+.ride-review {
+  margin-top: 18px;
+  padding: 18px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ride-review-muted {
+  flex-direction: row;
+  align-items: center;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.ride-review-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ride-review-header strong {
+  color: #1e293b;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.ride-review-date {
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.ride-review-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ride-review-stars-static {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.ride-review-star {
+  color: #cbd5e1;
+  stroke-width: 1.8;
+}
+
+.ride-review-star.filled {
+  color: #f59e0b;
+}
+
+.ride-review-rating-label {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ride-review-stars {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.ride-review-star-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border: none;
+  background: transparent;
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.ride-review-star-button.active {
+  color: #f59e0b;
+}
+
+.ride-review-star-button:hover {
+  transform: scale(1.12);
+}
+
+.ride-review-star-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.ride-review-textarea {
+  width: 100%;
+  min-height: 82px;
+  padding: 12px;
+  border: 1px solid #dbe3ec;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #334155;
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ride-review-textarea::placeholder {
+  color: #94a3b8;
+}
+
+.ride-review-textarea:focus {
+  border-color: #0d9488;
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.1);
+}
+
+.ride-review-textarea:disabled {
+  background: #f1f5f9;
+  cursor: not-allowed;
+}
+
+.ride-review-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.ride-review-counter {
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.ride-review-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 10px 17px;
+  border: none;
+  border-radius: 9px;
+  background: #0f766e;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.ride-review-submit:hover:not(:disabled) {
+  background: #115e59;
+  transform: translateY(-1px);
+}
+
+.ride-review-submit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ride-review-comment {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.ride-review-comment svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+  color: #94a3b8;
+}
+
+.ride-review-no-comment {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 12px;
+  font-style: italic;
+}
+
+.ride-review-error {
+  margin: 0;
+  color: #dc2626;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ride-review-link-button {
+  align-self: flex-start;
+  padding: 6px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ride-review-link-button:hover {
+  background: #f0fdfa;
+  border-color: #0f766e;
+}
+
+.ride-review-spin {
+  animation: ride-review-rotation 1s linear infinite;
+}
+
+@keyframes ride-review-rotation {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 480px) {
+  .ride-review {
+    padding: 14px;
+  }
+
+  .ride-review-footer {
+    align-items: flex-end;
+  }
+
+  .ride-review-submit {
+    padding: 9px 12px;
+  }
+}
